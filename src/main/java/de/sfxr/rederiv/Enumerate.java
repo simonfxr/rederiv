@@ -59,7 +59,7 @@ public class Enumerate {
                     String a, b;
                     Iterator<String> ai = xs.iterator();
                     Iterator<String> bi;
-                    boolean hasNext = fwd();
+                    int hasNext = -1;
 
                     private boolean fwd() {
                         for (; ; ) {
@@ -78,13 +78,15 @@ public class Enumerate {
 
                     @Override
                     public boolean hasNext() {
-                        return hasNext;
+                        if (hasNext >= 0) return hasNext != 0;
+                        hasNext = fwd() ? 1 : 0;
+                        return hasNext != 0;
                     }
 
                     @Override
                     public String next() {
                         var ret = a + b;
-                        hasNext = fwd();
+                        hasNext = -1;
                         return ret;
                     }
                 };
@@ -120,7 +122,7 @@ public class Enumerate {
 
     public static Iterable<String> repeatUpTo(int n, Iterable<String> xs) {
         if (n == 0) return List.of("");
-        return cons("", cross(xs, () -> repeatUpTo(n - 1, xs).iterator()));
+        return cons("", cross(xs, () -> repeatUpTo(Re.Rep.sub(n, 1), xs).iterator()));
     }
 
     public static Iterable<String> enumerate(Re re) {

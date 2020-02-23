@@ -9,6 +9,10 @@ public interface ReAlg<R extends ReAlg<R>> extends Comparable<R> {
 
     R range(int min, int max);
 
+    default R repeat(int n) {
+        return range(n, n);
+    }
+
     R capture();
 
     default R opt() {

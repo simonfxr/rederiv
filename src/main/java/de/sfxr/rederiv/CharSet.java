@@ -14,7 +14,7 @@ public abstract class CharSet extends Re implements Set<Integer> {
 
         public final IntSet chars;
         public final boolean complement;
-        int _repr = -1;
+        private int repr = -1;
 
         private Sparse(IntSet chars, boolean complement) {
             this.complement = complement;
@@ -78,7 +78,7 @@ public abstract class CharSet extends Re implements Set<Integer> {
 
         @Override
         public int hashCode() {
-            return chars.hashCode();
+            return Objects.hash(complement, chars);
         }
 
         @Override
@@ -175,7 +175,7 @@ public abstract class CharSet extends Re implements Set<Integer> {
 
         @Override
         public int pickOne() {
-            var r = _repr;
+            var r = repr;
             if (r > 0) return r;
 
             if (!complement) {
@@ -185,7 +185,7 @@ public abstract class CharSet extends Re implements Set<Integer> {
             } else {
                 for (r = 0; !Character.isValidCodePoint(r) || !containsChar(r); ++r) {}
             }
-            _repr = r;
+            repr = r;
             return r;
         }
 
@@ -196,7 +196,7 @@ public abstract class CharSet extends Re implements Set<Integer> {
 
         @Override
         public int fromSingletonCharSetNoCapture() {
-            return !complement && chars.size() == 1 ? pickOne() : Integer.MIN_VALUE;
+            return !complement && chars.size() == 1 ? pickOne() : -1;
         }
     }
 
@@ -311,11 +311,13 @@ public abstract class CharSet extends Re implements Set<Integer> {
     public abstract <T> T[] toArray(T[] a);
 
     @Override
+    @Deprecated
     public boolean add(Integer integer) {
         throw new UnsupportedOperationException();
     }
 
     @Override
+    @Deprecated
     public boolean remove(Object o) {
         throw new UnsupportedOperationException();
     }
@@ -332,21 +334,25 @@ public abstract class CharSet extends Re implements Set<Integer> {
     }
 
     @Override
+    @Deprecated
     public boolean addAll(Collection<? extends Integer> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
+    @Deprecated
     public boolean retainAll(Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
+    @Deprecated
     public boolean removeAll(Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
+    @Deprecated
     public void clear() {
         throw new UnsupportedOperationException();
     }

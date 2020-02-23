@@ -41,7 +41,9 @@ public class DFA {
 
         private int putQ(Re q) {
             var old = Q.putIfAbsent(q, nextQ);
-            return old != null ? old : nextQ++;
+            var ret = old != null ? old : nextQ++;
+            if (Q.get(q) != ret) throw new IllegalStateException();
+            return ret;
         }
 
         private void putDelta(int qI, CharSet S, int qcI) {
@@ -59,6 +61,7 @@ public class DFA {
             var qc = ReDeriv.deriv(q, S.pickOne());
             System.out.println("qc=" + qc);
             var qcI = Q.get(qc);
+            System.out.println("qcI=" + qcI);
             if (!qc.isVoid()) {
                 putDelta(putQ(q), S, qcI == null ? putQ(qc) : qcI);
                 if (qcI == null) explore(qc);
@@ -76,26 +79,26 @@ public class DFA {
             }
         }
 
-        public int initialState() {
-            var q0 = Q.inverse().get(0);
-            return q0 != null ? 0 : -1;
-        }
-
         public boolean matches(String s) {
-            int q = initialState();
-            if (q < 0 || s == null) return false;
+            if (s == null) return false;
+            if (Q.isEmpty()) return s.isEmpty();
+            // System.out.println("Starting matching");
+            int q = 0;
             loop:
-            for (int i = 0, cp = 0;
+            for (int i = 0, cp;
                     i < s.length() && !accepting.contains(q);
                     i += Character.charCount(cp)) {
                 cp = s.codePointAt(i);
+                // System.out.println("q=S" + q + ", ch=" + Character.toString(cp));
                 for (var S : delta.get(q).entrySet()) {
                     if (S.getKey().containsChar(cp)) {
                         q = S.getValue();
+                        // System.out.println("New state: q=S" + q);
                         continue loop;
                     }
-                    return false;
                 }
+                // System.out.println("No match for input character found");
+                return false;
             }
             return accepting.contains(q);
         }
@@ -103,14 +106,7 @@ public class DFA {
         @Override
         public String toString() {
             var states = new ArrayList<>(Q.inverse().entrySet());
-            Collections.sort(
-                    states,
-                    new Comparator<Map.Entry<Integer, Re>>() {
-                        @Override
-                        public int compare(Map.Entry<Integer, Re> o1, Map.Entry<Integer, Re> o2) {
-                            return o1.getKey().compareTo(o2.getKey());
-                        }
-                    });
+            Collections.sort(states, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
 
             var sb = new StringBuilder("NFA.Builder {\n");
 

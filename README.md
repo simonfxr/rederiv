@@ -1,9 +1,16 @@
 
-# ReDeriv - Linear time NFA based regular expression matching
+# ReDeriv - Linear time DFA based regular expression matching
 
 ReDeriv is based on the algorithm presented in __Regular-expression derivatives re-examined__ (see [[1]](#1)).
 
 ## TODO write about existing and planned features.
+
+## Current status
+
+This is still very much work in progress, at the moment is just a prototype with
+a lot of planned features missing (and most certainly a lot of bugs).
+
+
 
 ## Rerferences
 

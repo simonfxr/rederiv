@@ -29,12 +29,17 @@ public abstract class Re implements ReAlg<Re> {
         public final boolean isSeq;
         public final Re a, b;
         private final int capCount;
+        private final boolean matchesEmpty;
 
         private Branch(boolean isSeq, int caps, Re a, Re b) {
             this.isSeq = isSeq;
             this.a = Objects.requireNonNull(a);
             this.b = Objects.requireNonNull(b);
             this.capCount = caps;
+            this.matchesEmpty =
+                    isSeq
+                            ? a.matchesEmpty() && b.matchesEmpty()
+                            : a.matchesEmpty() || b.matchesEmpty();
         }
 
         public static Re alt(Re a, Re b) {
@@ -114,9 +119,7 @@ public abstract class Re implements ReAlg<Re> {
 
         @Override
         public boolean matchesEmpty() {
-            return isSeq
-                    ? a.matchesEmpty() && b.matchesEmpty()
-                    : a.matchesEmpty() || b.matchesEmpty();
+            return matchesEmpty;
         }
 
         @Override
@@ -135,12 +138,12 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        public int compareToRe(Branch o) {
-            int r = Boolean.compare(isSeq, o.isSeq);
+        public int compareToRe(Branch rhs) {
+            int r = Boolean.compare(isSeq, rhs.isSeq);
             if (r != 0) return r;
-            r = a.compareTo(o.a);
+            r = a.compareTo(rhs.a);
             if (r != 0) return r;
-            return b.compareTo(o.b);
+            return b.compareTo(rhs.b);
         }
 
         @Override
@@ -282,7 +285,7 @@ public abstract class Re implements ReAlg<Re> {
 
             // x{a}{n, m} = x{a * n, a * m}
             if (a == b) // FIXME: overflow...
-            return new Rep(a * n, mult(a, m), re);
+            return new Rep(a * n, mult(a, m), rep.re);
 
             // if b + 1 >= 2 a
             // x{a, b}{0, m} = 1 + x{a, m * b}
@@ -354,12 +357,12 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        protected int compareToRe(Rep re) {
-            int r = Integer.compare(min, re.min);
+        protected int compareToRe(Rep rhs) {
+            int r = Integer.compare(min, rhs.min);
             if (r != 0) return r;
-            r = Integer.compare(max, re.max);
+            r = Integer.compare(max, rhs.max);
             if (r != 0) return r;
-            return re.compareTo(re.re);
+            return re.compareTo(rhs.re);
         }
     }
 
@@ -577,7 +580,7 @@ public abstract class Re implements ReAlg<Re> {
     }
 
     protected int fromSingletonCharSetNoCapture() {
-        return Integer.MIN_VALUE;
+        return -1;
     }
 
     protected Capture fromCapture() {
