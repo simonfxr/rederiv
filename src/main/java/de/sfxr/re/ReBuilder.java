@@ -1,17 +1,18 @@
 package de.sfxr.re;
 
 public final class ReBuilder {
-    private final static ReBuilder instance = new ReBuilder();
+    private static final ReBuilder instance = new ReBuilder();
+
     private ReBuilder() {}
 
-    public final static ReBuilder get() { return instance; }
+    public static final ReBuilder get() {
+        return instance;
+    }
 
     public Re seq(Re... res) {
-        if (res.length == 0)
-            return Re.Lit.EMPTY;
+        if (res.length == 0) return Re.Lit.EMPTY;
         Re re = res[res.length - 1];
-        for (var i = res.length - 1; --i >= 0; )
-            re = res[i].seq(re);
+        for (var i = res.length - 1; --i >= 0; ) re = res[i].seq(re);
         return re;
     }
 
@@ -20,11 +21,9 @@ public final class ReBuilder {
     }
 
     public Re alt(Re... res) {
-        if (res.length == 0)
-            return CharSet.NONE;
+        if (res.length == 0) return CharSet.NONE;
         Re re = res[res.length - 1];
-        for (var i = res.length - 1; --i >= 0; )
-            re = res[i].alt(re);
+        for (var i = res.length - 1; --i >= 0; ) re = res[i].alt(re);
         return re;
     }
 
@@ -44,7 +43,9 @@ public final class ReBuilder {
         return Re.Lit.EMPTY;
     }
 
-    public Re any() { return CharSet.ANY; }
+    public Re any() {
+        return CharSet.ANY;
+    }
 
     public Re digit() {
         return CharSet.DIGIT;

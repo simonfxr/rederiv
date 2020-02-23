@@ -1,6 +1,5 @@
 package de.sfxr.re;
 
-
 import java.util.Arrays;
 import java.util.List;
 
@@ -9,10 +8,17 @@ public class Main {
     public static List<Re> patterns(ReBuilder re) {
         return Arrays.asList(
                 re.seq("/users/by-group/group-", re.digits().capture()),
-                re.seq("/participants/group-", re.digits().capture(), re.r("/user-"), re.digits().capture()),
-                re.seq("/participants/group-", re.digits().capture(), re.r("/guest-"), re.digits().capture()),
-                re.seq("/participants/group-", re.digits().capture(), re.r("/unknown"))
-        );
+                re.seq(
+                        "/participants/group-",
+                        re.digits().capture(),
+                        re.r("/user-"),
+                        re.digits().capture()),
+                re.seq(
+                        "/participants/group-",
+                        re.digits().capture(),
+                        re.r("/guest-"),
+                        re.digits().capture()),
+                re.seq("/participants/group-", re.digits().capture(), re.r("/unknown")));
     }
 
     public static void main(String[] args) {
@@ -57,7 +63,5 @@ public class Main {
         System.out.println("re1=" + re1);
         dfa = DFA.compile(re1);
         System.out.println("DFA\n" + dfa);
-
-
     }
 }

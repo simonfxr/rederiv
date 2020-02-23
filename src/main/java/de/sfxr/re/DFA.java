@@ -8,7 +8,6 @@ import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.map.hash.HashObjIntMaps;
 import com.koloboke.collect.set.IntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
-
 import java.util.*;
 
 public class DFA {
@@ -34,7 +33,7 @@ public class DFA {
         return builder.toString();
     }
 
-    private final static class Builder {
+    private static final class Builder {
         private Integer nextQ = 0;
         public final BiMap<Re, Integer> Q = HashBiMap.create();
         public final IntObjMap<ObjIntMap<CharSet>> delta = HashIntObjMaps.newMutableMap();
@@ -55,9 +54,8 @@ public class DFA {
         }
 
         private void buildRec(Re q, CharSet S) {
-            if (S.isEmptySet())
-                return;
-            System.out.println("q="+q+", S=" + S);
+            if (S.isEmptySet()) return;
+            System.out.println("q=" + q + ", S=" + S);
             var qc = ReDeriv.deriv(q, S.pickOne());
             System.out.println("qc=" + qc);
             var qcI = Q.get(qc);
@@ -74,8 +72,7 @@ public class DFA {
         public void build(Re q) {
             explore(q);
             for (var ent : Q.entrySet()) {
-                if (ent.getKey().matchesEmpty())
-                    accepting.add(ent.getValue().intValue());
+                if (ent.getKey().matchesEmpty()) accepting.add(ent.getValue().intValue());
             }
         }
 
@@ -86,9 +83,11 @@ public class DFA {
 
         public boolean matches(String s) {
             int q = initialState();
-            if (q < 0 || s == null)
-                return false;
-            loop: for (int i = 0, cp = 0; i < s.length() && !accepting.contains(q); i += Character.charCount(cp)) {
+            if (q < 0 || s == null) return false;
+            loop:
+            for (int i = 0, cp = 0;
+                    i < s.length() && !accepting.contains(q);
+                    i += Character.charCount(cp)) {
                 cp = s.codePointAt(i);
                 for (var S : delta.get(q).entrySet()) {
                     if (S.getKey().containsChar(cp)) {
@@ -104,19 +103,24 @@ public class DFA {
         @Override
         public String toString() {
             var states = new ArrayList<>(Q.inverse().entrySet());
-            Collections.sort(states, new Comparator<Map.Entry<Integer, Re>>() {
-                @Override
-                public int compare(Map.Entry<Integer, Re> o1, Map.Entry<Integer, Re> o2) {
-                    return o1.getKey().compareTo(o2.getKey());
-                }
-            });
+            Collections.sort(
+                    states,
+                    new Comparator<Map.Entry<Integer, Re>>() {
+                        @Override
+                        public int compare(Map.Entry<Integer, Re> o1, Map.Entry<Integer, Re> o2) {
+                            return o1.getKey().compareTo(o2.getKey());
+                        }
+                    });
 
             var sb = new StringBuilder("NFA.Builder {\n");
 
             for (var ent : states)
-                sb.append("  S").append(ent.getKey())
+                sb.append("  S")
+                        .append(ent.getKey())
                         .append(accepting.contains(ent.getKey().intValue()) ? " F " : "   ")
-                        .append(": ").append(ent.getValue()).append('\n');
+                        .append(": ")
+                        .append(ent.getValue())
+                        .append('\n');
             sb.append('\n');
 
             for (var ent : states) {
@@ -129,8 +133,11 @@ public class DFA {
                 }
                 sb.append('\n');
                 for (var t : tt.entrySet())
-                    sb.append("    ").append(t.getKey().toPattern())
-                      .append(" -> S").append(t.getValue().intValue()).append('\n');
+                    sb.append("    ")
+                            .append(t.getKey().toPattern())
+                            .append(" -> S")
+                            .append(t.getValue().intValue())
+                            .append('\n');
                 sb.append("  }\n");
             }
 
@@ -138,5 +145,4 @@ public class DFA {
             return sb.toString();
         }
     }
-
 }
