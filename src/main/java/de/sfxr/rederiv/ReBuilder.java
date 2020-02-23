@@ -1,4 +1,4 @@
-package de.sfxr.re;
+package de.sfxr.rederiv;
 
 public final class ReBuilder {
     private static final ReBuilder instance = new ReBuilder();

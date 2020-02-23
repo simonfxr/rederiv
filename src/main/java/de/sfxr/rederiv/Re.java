@@ -1,4 +1,4 @@
-package de.sfxr.re;
+package de.sfxr.rederiv;
 
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -596,15 +596,35 @@ public abstract class Re implements ReAlg<Re> {
         return this.unwrapCapture().visit(vis);
     }
 
-    private int compareByKind(Re re) { return kind().compareTo(re.kind()); }
-    protected  int compareToRe(Lit re) { return compareByKind(re); }
-    protected int compareToRe(Branch re) { return compareByKind(re); }
-    protected  int compareToRe(Rep re) { return compareByKind(re); }
-    protected  int compareToRe(CharSet re) { return compareByKind(re); }
-    protected  int compareToRe(Capture re) { return compareByKind(re); }
-    protected  abstract int compareToRe(Re re);
+    private int compareByKind(Re re) {
+        return kind().compareTo(re.kind());
+    }
 
-    private Kind unwrappedKind() { return unwrapCapture().kind(); }
+    protected int compareToRe(Lit re) {
+        return compareByKind(re);
+    }
+
+    protected int compareToRe(Branch re) {
+        return compareByKind(re);
+    }
+
+    protected int compareToRe(Rep re) {
+        return compareByKind(re);
+    }
+
+    protected int compareToRe(CharSet re) {
+        return compareByKind(re);
+    }
+
+    protected int compareToRe(Capture re) {
+        return compareByKind(re);
+    }
+
+    protected abstract int compareToRe(Re re);
+
+    private Kind unwrappedKind() {
+        return unwrapCapture().kind();
+    }
 
     @Override
     public int compareTo(Re rhs) {

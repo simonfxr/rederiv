@@ -1,4 +1,4 @@
-package de.sfxr.re;
+package de.sfxr.rederiv;
 
 import java.util.Collections;
 import java.util.HashSet;

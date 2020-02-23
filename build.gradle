@@ -1,6 +1,5 @@
 plugins {
     id 'java'
-    id 'application'
     id 'idea'
 }
 
@@ -20,13 +19,15 @@ version '1.0-SNAPSHOT'
 
 sourceCompatibility = 11
 
-application {
-    mainClassName = "de.sfxr.re.Main"
+test {
+    useJUnitPlatform()
 }
+
 dependencies {
-    testImplementation "junit:junit:4.12"
-    // implementation "com.github.thomasmueller:minperf:master-SNAPSHOT"
     implementation 'com.koloboke:koloboke-api-jdk8:1.0.0'
     implementation 'com.koloboke:koloboke-impl-jdk8:1.0.0'
     implementation 'com.google.guava:guava:28.2-jre'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
 }

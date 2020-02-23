@@ -1,9 +1,9 @@
-package de.sfxr.re;
+package de.sfxr.rederiv;
 
 import java.util.Arrays;
 import java.util.List;
 
-public class Main {
+public class Examples {
 
     public static List<Re> patterns(ReBuilder re) {
         return Arrays.asList(
@@ -19,6 +19,16 @@ public class Main {
                         re.r("/guest-"),
                         re.digits().capture()),
                 re.seq("/participants/group-", re.digits().capture(), re.r("/unknown")));
+    }
+
+    public static void printEnumeration(Re re, int n) {
+        System.out.println("Enumerating RE: " + re);
+        System.out.println();
+        int i = 0;
+        for (var s : Enumerate.enumerate(re)) {
+            if (i++ >= n) break;
+            System.out.println(String.format("%3d", i) + "    " + s);
+        }
     }
 
     public static void main(String[] args) {
@@ -41,8 +51,12 @@ public class Main {
             System.out.println("C(re1) = " + Cre1);
         }
 
-        var re1 = re.any();
+        CharSet XY = CharSet.fromString("XY");
+        CharSet S123 = CharSet.fromString("123");
+
+        Re re1 = XY;
         System.out.println("re1=" + re1);
+        printEnumeration(re1, 10);
         var dfa = DFA.compile(re1);
         System.out.println("DFA\n" + dfa);
 
@@ -51,6 +65,7 @@ public class Main {
         System.out.println();
 
         re1 = re.r("ABC");
+        printEnumeration(re1, 10);
         System.out.println("re1=" + re1);
         dfa = DFA.compile(re1);
         System.out.println("DFA\n" + dfa);
@@ -59,7 +74,8 @@ public class Main {
         System.out.println();
         System.out.println();
 
-        re1 = re.any().seq(re.r("A").range(2, 4)).seq(re.digit());
+        re1 = re.seq(CharSet.fromString("XY"), re.r("A").range(2, 4)).seq(S123);
+        printEnumeration(re1, 100);
         System.out.println("re1=" + re1);
         dfa = DFA.compile(re1);
         System.out.println("DFA\n" + dfa);

@@ -1,10 +1,10 @@
-package de.sfxr.re;
+package de.sfxr.rederiv;
 
 import com.koloboke.collect.set.IntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
-import java.util.Objects;
+import java.util.*;
 
-public abstract class CharSet extends Re {
+public abstract class CharSet extends Re implements Set<Integer> {
 
     public static final Sparse NONE = new Sparse(HashIntSets.newImmutableSet(new int[0]));
     public static final Sparse ANY = new Sparse(NONE.chars, true);
@@ -103,7 +103,8 @@ public abstract class CharSet extends Re {
             if (complement && s.complement)
                 return this.complement().union(s.complement()).complement();
             var u = this;
-            if (u.complement || (!u.complement && !s.complement && u.size() < s.size())) {
+            if (u.complement
+                    || (!u.complement && !s.complement && u.chars.size() < s.chars.size())) {
                 var t = u;
                 u = s;
                 s = t;
@@ -125,7 +126,7 @@ public abstract class CharSet extends Re {
             if (complement || s.complement)
                 return this.complement().intersect(s.complement()).complement();
             var u = this;
-            if (s.size() > u.size()) {
+            if (s.chars.size() > u.chars.size()) {
                 var t = u;
                 u = s;
                 s = t;
@@ -134,6 +135,42 @@ public abstract class CharSet extends Re {
             w.addAll(s.chars);
             w.shrink();
             return from(w);
+        }
+
+        @Override
+        public Iterator<Integer> iterator() {
+            if (!complement) return chars.iterator();
+            return new Iterator<>() {
+                int cp = 0;
+                boolean hasNext = findNext();
+
+                private boolean findNext() {
+                    for (; cp < 0x110000; ++cp) if (!chars.contains(cp)) return true;
+                    return false;
+                }
+
+                @Override
+                public boolean hasNext() {
+                    return hasNext;
+                }
+
+                @Override
+                public Integer next() {
+                    var n = cp++;
+                    hasNext = findNext();
+                    return n;
+                }
+            };
+        }
+
+        @Override
+        public <T> T[] toArray(T[] a) {
+            if (!complement) return chars.toArray(a);
+            int n = size();
+            if (a.length != n) a = Arrays.copyOf(a, n);
+            int i = 0;
+            for (var x : this) a[i++] = (T) x;
+            return a;
         }
 
         @Override
@@ -152,20 +189,21 @@ public abstract class CharSet extends Re {
             return r;
         }
 
-        private int size() {
-            return chars.size();
+        @Override
+        public int size() {
+            return complement ? 0x110000 - chars.size() : chars.size();
         }
 
         @Override
         public int fromSingletonCharSetNoCapture() {
-            return !complement && size() == 1 ? pickOne() : Integer.MIN_VALUE;
+            return !complement && chars.size() == 1 ? pickOne() : Integer.MIN_VALUE;
         }
     }
 
-    private static final Sparse[] ASCII_CHAR_SETS = new Sparse[128];
+    private static final Sparse[] ASCII_CHARS = new Sparse[128];
 
     static {
-        for (int i = 0; i < ASCII_CHAR_SETS.length; ++i) ASCII_CHAR_SETS[i] = fromSingleChar(i);
+        for (int i = 0; i < ASCII_CHARS.length; ++i) ASCII_CHARS[i] = fromSingleChar(i);
     }
 
     private static Sparse fromSingleChar(int ch) {
@@ -185,8 +223,7 @@ public abstract class CharSet extends Re {
     }
 
     public static CharSet setFromChar(int ch) {
-        if (0 <= ch && ch < 128) return ASCII_CHAR_SETS[ch];
-
+        if (0 <= ch && ch < 128) return ASCII_CHARS[ch];
         return fromSingleChar(ch);
     }
 
@@ -254,4 +291,63 @@ public abstract class CharSet extends Re {
     public abstract CharSet union(CharSet s);
 
     public abstract CharSet union(Sparse s);
+
+    /** Set methods */
+    @Override
+    @Deprecated
+    public final boolean contains(Object o) {
+        return (o instanceof Integer) && containsChar((Integer) o);
+    }
+
+    @Override
+    public abstract Iterator<Integer> iterator();
+
+    @Override
+    public Object[] toArray() {
+        return toArray(new Object[0]);
+    }
+
+    @Override
+    public abstract <T> T[] toArray(T[] a);
+
+    @Override
+    public boolean add(Integer integer) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean remove(Object o) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean containsAll(Collection<?> c) {
+        if (c instanceof CharSet) {
+            return intersect((CharSet) c).size() == c.size();
+        } else {
+            for (Object x : c)
+                if (!(x instanceof Integer) || !containsChar((Integer) x)) return false;
+            return true;
+        }
+    }
+
+    @Override
+    public boolean addAll(Collection<? extends Integer> c) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean retainAll(Collection<?> c) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean removeAll(Collection<?> c) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void clear() {
+        throw new UnsupportedOperationException();
+    }
 }

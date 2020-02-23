@@ -1,4 +1,4 @@
-package de.sfxr.re;
+package de.sfxr.rederiv;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;

@@ -1,4 +1,4 @@
-package de.sfxr.re;
+package de.sfxr.rederiv;
 
 public interface ReAlg<R extends ReAlg<R>> extends Comparable<R> {
     int INF_RANGE = Integer.MAX_VALUE;
