@@ -21,7 +21,7 @@ public final class ReBuilder {
 
     public Re alt(Re... res) {
         if (res.length == 0)
-            return Re.Void.val;
+            return CharSet.NONE;
         Re re = res[res.length - 1];
         for (var i = res.length - 1; --i >= 0; )
             re = res[i].alt(re);
@@ -43,6 +43,8 @@ public final class ReBuilder {
     public Re r() {
         return Re.Lit.EMPTY;
     }
+
+    public Re any() { return CharSet.ANY; }
 
     public Re digit() {
         return CharSet.DIGIT;

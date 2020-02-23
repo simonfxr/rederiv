@@ -1,42 +1,46 @@
 package de.sfxr.re;
 
-import java.util.Collections;
-import java.util.HashSet;
+import com.koloboke.collect.set.IntSet;
+import com.koloboke.collect.set.hash.HashIntSets;
+
 import java.util.Objects;
-import java.util.Set;
 
 public abstract class CharSet extends Re {
 
-    public final static Dense NONE = new Dense(Collections.emptySet());
-    public final static Dense ANY = new Dense(NONE.chars, true);
+    public final static Sparse NONE = new Sparse(HashIntSets.newImmutableSet(new int[0]));
+    public final static Sparse ANY = new Sparse(NONE.chars, true);
     public final static CharSet DIGIT = fromString("0123456789");
 
-    public final static class Dense extends CharSet {
+    public final static class Sparse extends CharSet {
 
-        public final Set<Integer> chars;
+        public final IntSet chars;
         public final boolean complement;
+        int _repr = -1;
 
-        private Dense(Set<Integer> chars, boolean complement) {
+        private Sparse(IntSet chars, boolean complement) {
             this.complement = complement;
             this.chars = Objects.requireNonNull(chars);
         }
 
-        public static Dense from(Set<Integer> chars, boolean complement) {
-            return chars.isEmpty() ? (complement ? ANY : NONE) : new Dense(chars, complement);
+        public static Sparse from(IntSet chars) { return from(chars, false); }
+
+        public static Sparse from(IntSet chars, boolean complement) {
+            return chars.isEmpty() ? (complement ? ANY : NONE) : new Sparse(chars, complement);
         }
 
-        public Dense(Set<Integer> chars) {
+        private Sparse(IntSet chars) {
             this(chars, false);
         }
 
         @Override
         protected int compareToCharSet(CharSet s) {
-            return -s.compareToDense(this);
+            return -s.compareToSparse(this);
         }
 
         @Override
-        protected int compareToDense(Dense s) {
-            var r = Integer.compare(chars.size(), s.chars.size());
+        protected int compareToSparse(Sparse s) {
+            var r = Boolean.compare(complement, s.complement);
+            if (r == 0) r = Integer.compare(chars.size(), s.chars.size());
             if (r == 0) r = Integer.compare(chars.hashCode(), s.chars.hashCode());
             if (r != 0) return r;
             if (chars.equals(s.chars)) return 0;
@@ -46,9 +50,14 @@ public abstract class CharSet extends Re {
 
         @Override
         protected String toPattern(int prec) {
-            if (chars.isEmpty()) return "";
+            if (chars.isEmpty()) {
+                if (!complement)
+                    throw new IllegalStateException("Can't convert the empty character class to a pattern");
+                return ".";
+            }
             var b = new StringBuilder();
-            if (chars.size() == 1) return b.appendCodePoint(pickOne()).toString();
+            if (!complement && chars.size() == 1)
+                return b.appendCodePoint(pickOne()).toString();
             b.append('[');
             if (complement) b.append('^');
             for (var ch : chars) b.appendCodePoint(ch);
@@ -58,12 +67,7 @@ public abstract class CharSet extends Re {
 
         @Override
         public String litPrefix() {
-            return chars.size() == 1 ? Character.toString(chars.iterator().next()) : "";
-        }
-
-        @Override
-        public boolean isEmptySet() {
-            return chars.isEmpty();
+            return chars.size() == 1 ? Character.toString(pickOne()) : "";
         }
 
         @Override
@@ -78,7 +82,8 @@ public abstract class CharSet extends Re {
 
         @Override
         public String toString() {
-            return "Dense{ " + toPattern() + " }";
+            return isEmptySet() ? "VOID" :
+                    "Sparse{ " + toPattern() + " }";
         }
 
         @Override
@@ -92,25 +97,16 @@ public abstract class CharSet extends Re {
         }
 
         @Override
-        public CharSet intersect(Dense s) {
+        public CharSet intersect(Sparse s) {
             if (s == this) return this;
             if (s == NONE || this == NONE) return NONE;
             if (complement && s.complement)
                 return this.complement().union(s.complement()).complement();
-            if (!complement && !s.complement) {
-                var ss = new HashSet<>(chars);
-                ss.retainAll(s.chars);
-                return from(ss, false);
-            }
             var u = this;
-            if (u.complement) {
+            if (u.complement || (!u.complement && !s.complement && u.size() < s.size())) {
                 var t = u; u = s; s = t;
             }
-            // FIXME: iterate over the smaller of the two
-            var ss = new HashSet<Integer>();
-            for (var ch : u.chars)
-                if (s.containsChar(ch)) ss.add(ch);
-            return from(ss, false);
+            return from(HashIntSets.newImmutableSet(u.chars.stream().filter(s::containsChar).iterator()));
         }
 
         @Override
@@ -119,42 +115,63 @@ public abstract class CharSet extends Re {
         }
 
         @Override
-        public CharSet union(Dense s) {
+        public CharSet union(Sparse s) {
             if (s == this || s == NONE) return this;
             if (this == NONE) return s;
-            if (!complement && !s.complement) {
-                var ss = new HashSet<>(chars);
-                ss.addAll(s.chars);
-                return from(ss, false);
+            if (complement || s.complement)
+                return this.complement().intersect(s.complement()).complement();
+            var u = this;
+            if (s.size() > u.size()) {
+                var t = u; u = s; s = t;
             }
-            return this.complement().intersect(s.complement()).complement();
+            var w = HashIntSets.newMutableSet(u.chars);
+            w.addAll(s.chars);
+            w.shrink();
+            return from(w);
         }
 
         @Override
         public int pickOne() {
-            if (isEmptySet())
-                throw new IllegalStateException("Empty CharSet");
-            return chars.iterator().next();
+            var r = _repr;
+            if (r > 0)
+                return r;
+
+            if (!complement) {
+                var i = chars.cursor();
+                if (!i.moveNext())
+                    throw new IllegalStateException("Empty CharSet");
+                r = i.elem();
+            } else {
+                for (r = 0; !Character.isValidCodePoint(r) || !containsChar(r); ++r) {}
+            }
+            _repr = r;
+            return r;
+        }
+
+        private int size() { return chars.size(); }
+
+        @Override
+        public int fromSingletonCharSetNoCapture() {
+            return !complement && size() == 1 ? pickOne() : Integer.MIN_VALUE;
         }
     }
 
-    private final static Dense[] ASCII_CHAR_SETS = new Dense[128];
+    private final static Sparse[] ASCII_CHAR_SETS = new Sparse[128];
 
     static {
         for (int i = 0; i < ASCII_CHAR_SETS.length; ++i)
             ASCII_CHAR_SETS[i] = fromSingleChar(i);
     }
 
-    private static Dense fromSingleChar(int ch) {
-        if (ch < 0)
-            throw new IllegalArgumentException();
-        return new Dense(Collections.singleton(ch));
+    private static Sparse fromSingleChar(int ch) {
+        if (!Character.isValidCodePoint(ch))
+            throw new IllegalArgumentException("Invalid code point");
+        return new Sparse(HashIntSets.newImmutableSetOf(ch));
     }
 
-
     @Override
-    protected ReCon typeTag() {
-        return ReCon.CHARCLASS;
+    protected Kind kind() {
+        return Kind.CharSet;
     }
 
     @Override
@@ -162,14 +179,15 @@ public abstract class CharSet extends Re {
         return vis.visit(this);
     }
 
-    public static CharSet from(int ch) {
+    public static CharSet setFromChar(int ch) {
         if (0 <= ch && ch < 128)
             return ASCII_CHAR_SETS[ch];
+
         return fromSingleChar(ch);
     }
 
-    public static CharSet from(char c) {
-        return from((int) c);
+    public static CharSet setFromChar(char c) {
+        return setFromChar((int) c);
     }
 
     @Override
@@ -178,15 +196,22 @@ public abstract class CharSet extends Re {
     }
 
     protected abstract int compareToCharSet(CharSet s);
-    protected abstract int compareToDense(Dense s);
+    protected abstract int compareToSparse(Sparse s);
 
-    public static Dense fromString(String s) {
-        var ss = new HashSet<Integer>();
-        for (int i = 0, cp = 0; i < s.length(); i += Character.charCount(cp)) {
+    public static Sparse fromString(String s) {
+        if (s.isEmpty()) return NONE;
+        int cp = s.codePointAt(0);
+        int i = Character.charCount(cp);
+        if (i == s.length())
+            return fromSingleChar(cp);
+        var ss = HashIntSets.newMutableSet();
+        ss.add(cp);
+        for (; i < s.length(); i += Character.charCount(cp)) {
             cp = s.codePointAt(i);
             ss.add(cp);
         }
-        return Dense.from(ss, false);
+        ss.shrink();
+        return Sparse.from(ss);
     }
 
     @Override
@@ -197,16 +222,20 @@ public abstract class CharSet extends Re {
     @Override
     public abstract int hashCode();
 
+    @Override
+    public CharSet fromCharSetNoCapture() {
+        return this;
+    }
+
     public abstract int pickOne();
-    public boolean isEmptySet() { return false; }
+    public boolean isEmptySet() { return isVoid(); }
     public abstract boolean containsChar(int ch);
 
     public abstract CharSet complement();
 
     public abstract CharSet intersect(CharSet s);
-    public abstract CharSet intersect(Dense s);
+    public abstract CharSet intersect(Sparse s);
 
     public abstract CharSet union(CharSet s);
-    public abstract CharSet union(Dense s);
-
+    public abstract CharSet union(Sparse s);
 }

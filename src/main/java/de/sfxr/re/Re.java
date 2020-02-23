@@ -3,24 +3,22 @@ package de.sfxr.re;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-public abstract class Re implements Comparable<Re> {
+public abstract class Re implements ReAlg<Re> {
 
-    public enum ReCon {
-        VOID,
-        LIT,
-        CHARCLASS,
-        SEQ,
-        ALT,
-        REP,
+    public enum Kind {
+        Lit,
+        CharSet,
+        Seq,
+        Alt,
+        Rep,
     }
 
     public interface Visitor<R> {
-        R visit(Branch b);
-        R visit(Rep r);
+        R visit(Branch br);
+        R visit(Rep rep);
         R visit(Lit l);
-        R visit(Void v);
-        R visit(CharSet c);
-        R visit(Capture c);
+        R visit(CharSet cs);
+        R visit(Capture cap);
     }
 
     public final static class Branch extends Re {
@@ -46,9 +44,13 @@ public abstract class Re implements Comparable<Re> {
             if (cb == 0 && (b.isVoid() || (b.isEmpty() && a.matchesEmpty()))) return a;
             if (cb == 0 && b.isEmpty()) return a.opt();
             if ((ca == 0 || cb == 0) && ord > 0) { var t = a; a = b; b = t; }
+            var caps = ca + cb;
+            CharSet r, s;
+            if (caps == 0 && (r = a.fromCharSetNoCapture()) != null && (s = b.fromCharSetNoCapture()) != null)
+                return r.union(s);
             var aalt = a.fromAltNoCapture();
             if (aalt != null) { a = aalt.a; b = alt(aalt.b, b); };
-            return new Branch(false, ca + cb, a, b);
+            return new Branch(false, caps, a, b);
         }
 
         public static Re seq(Re a, Re b) {
@@ -56,11 +58,14 @@ public abstract class Re implements Comparable<Re> {
             var cb = b.countCaptures();
             if (ca == 0 && a.isEmpty()) return b;
             if (cb == 0 && b.isEmpty()) return a;
-            if (a.isVoid() || b.isVoid()) return Void.val;
+            if (a.isVoid() || b.isVoid()) return a.asVoid();
             var caps = ca + cb;
             String alit, blit;
             if (caps == 0 && (alit = a.fromLit()) != null && (blit = b.fromLit()) != null)
                 return Lit.from(alit + blit);
+            int x, y;
+            if ((x = a.fromSingletonCharSetNoCapture()) >= 0 && (y = b.fromSingletonCharSetNoCapture()) >= 0)
+                return Lit.fromCodePoints(x, y);
             var aseq = a.fromSeqNoCapture();
             if (aseq != null) { a = aseq.a; b = seq(aseq.b, b); }
             return new Branch(true, caps, a, b);
@@ -99,7 +104,17 @@ public abstract class Re implements Comparable<Re> {
 
         @Override
         public String toString() {
-            return (isSeq ? "Seq {" : "Alt {") + a + ", " + b + "}";
+            var sb = new StringBuilder();
+            sb.append(isSeq ? "Seq {" : "Alt {");
+            Branch br = this, obr = this;
+            for (; br != null && br.isSeq == isSeq; obr = br, br = br.b.fromBranchNoCapture())
+                sb.append(br.a).append(", ");
+            return sb.append(br == null ? obr.b : br).append('}').toString();
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(isSeq, a, b);
         }
 
         public Integer compareRe(Branch o) {
@@ -111,8 +126,8 @@ public abstract class Re implements Comparable<Re> {
         }
 
         @Override
-        protected ReCon typeTag() {
-            return isSeq ? ReCon.SEQ : ReCon.ALT;
+        protected Kind kind() {
+            return isSeq ? Kind.Seq : Kind.Alt;
         }
 
         @Override
@@ -121,13 +136,8 @@ public abstract class Re implements Comparable<Re> {
         }
 
         @Override
-        public Branch fromAltNoCapture() {
-            return !isSeq ? this : null;
-        }
-
-        @Override
-        public Branch fromSeqNoCapture() {
-            return isSeq ? this : null;
+        protected Branch fromBranchNoCapture() {
+            return this;
         }
 
         @Override
@@ -146,15 +156,13 @@ public abstract class Re implements Comparable<Re> {
     }
 
     public final static class Rep extends Re {
-        public final static int INF = Integer.MAX_VALUE;
-
         public final int min, max;
         public final Re re;
 
         private Rep(int min, int max, Re re) {
             if (min < 0 || min > max)
                 throw new IllegalArgumentException();
-            if (min == INF)
+            if (min == INF_RANGE)
                 throw new IllegalArgumentException();
             this.min = min;
             this.max = max;
@@ -168,19 +176,22 @@ public abstract class Re implements Comparable<Re> {
         }
 
         public static int sub(int a, int b) {
-            return a == INF ? a : a - b;
+            return a == INF_RANGE ? a : a - b;
         }
         public static int mult(int a, int b) {
             if (a < 0 || b < 0)
                 throw new IllegalArgumentException();
-            return a == INF || b == INF ? INF :
+            return a == INF_RANGE || b == INF_RANGE ? INF_RANGE :
                    a < Integer.MAX_VALUE / b ? a * b :
                    throwing(new IllegalArgumentException("Overflow in multiplicity product"));
         }
 
         public static Re from(int min, int max, Re re) {
-            if (re.isVoid() && min == 0 && max == 0)
-                throw new IllegalArgumentException();
+            if (min == 0 && max == 0) {
+                if (re.isVoid())
+                    throw new IllegalArgumentException();
+                return re.asEmpty();
+            }
             if (re.isEmptyOrVoid() || (min == 1 && max == 1))
                 return re;
 
@@ -250,8 +261,8 @@ public abstract class Re implements Comparable<Re> {
                 return new Rep(a * n, mult(b, m), rep.re);
 
             // x{a, INF}{n, m} = x{a * n, INF}
-            if (b == INF)
-                return new Rep(a * n, INF, rep.re); // FIXME: handler overflow in next line
+            if (b == INF_RANGE)
+                return new Rep(a * n, INF_RANGE, rep.re); // FIXME: handler overflow in next line
 
             // x{a}{n, m} = x{a * n, a * m}
             if (a == b) // FIXME: overflow...
@@ -272,7 +283,7 @@ public abstract class Re implements Comparable<Re> {
 
         @Override
         public String toPattern(int prec) {
-            var multiplicity = max == INF ? (min == 0 ? "*" : min == 1 ? "+" : "{" + min + ",}") :
+            var multiplicity = max == INF_RANGE ? (min == 0 ? "*" : min == 1 ? "+" : "{" + min + ",}") :
                                min == max ? (min == 1 ? "?" : "{" + min + "}") :
                     "{" + min + "," + max + "}";
             return parenWhen(prec > 10, re.toPattern(10) + multiplicity);
@@ -290,7 +301,7 @@ public abstract class Re implements Comparable<Re> {
 
         @Override
         public String toString() {
-            return "Rep{ " + re + "{" + min + "," + (max == INF ? "INF" : max) + "} }";
+            return "Rep{ " + re + "{" + min + "," + (max == INF_RANGE ? "INF" : max) + "} }";
         }
 
         public Integer compareRe(Rep o) {
@@ -302,8 +313,8 @@ public abstract class Re implements Comparable<Re> {
         }
 
         @Override
-        protected ReCon typeTag() {
-            return ReCon.REP;
+        protected Kind kind() {
+            return Kind.Rep;
         }
 
         @Override
@@ -321,6 +332,11 @@ public abstract class Re implements Comparable<Re> {
         public int countCaptures() {
             return re.countCaptures();
         }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(min, max, re);
+        }
     }
 
     private static String parenWhen(boolean parens, String s) {
@@ -336,8 +352,16 @@ public abstract class Re implements Comparable<Re> {
             this.val = Objects.requireNonNull(val);
         }
 
-        public static Lit from(String val) {
-            return val.isEmpty() ? EMPTY : new Lit(val);
+        public static Re from(String val) {
+            if (val.isEmpty()) return EMPTY;
+            int cp = val.codePointAt(0);
+            if (val.length() == Character.charCount(cp))
+                return CharSet.setFromChar(cp);
+            return new Lit(val);
+        }
+
+        public static Re fromCodePoints(int x, int y) {
+            return new Lit(new StringBuilder().appendCodePoint(x).appendCodePoint(y).toString());
         }
 
         @Override
@@ -366,49 +390,17 @@ public abstract class Re implements Comparable<Re> {
         }
 
         @Override
-        protected ReCon typeTag() {
-            return ReCon.LIT;
+        protected Kind kind() {
+            return Kind.Lit;
         }
 
         @Override
         protected <R> R visit(Visitor<R> vis) {
             return vis.visit(this);
         }
-    }
-
-    public final static class Void extends Re {
-        public final static Void val = new Void();
-        private Void() {}
 
         @Override
-        public String toPattern(int prec) {
-            throw new UnsupportedOperationException("Can't render");
-        }
-
-        @Override
-        public boolean matchesEmpty() {
-            return false;
-        }
-
-        @Override
-        public String litPrefix() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public String toString() {
-            return "VOID{}";
-        }
-
-        @Override
-        protected ReCon typeTag() {
-            return ReCon.VOID;
-        }
-
-        @Override
-        protected <R> R visit(Visitor<R> vis) {
-            return vis.visit(this);
-        }
+        public int hashCode() { return val.hashCode(); }
     }
 
     public static final class Capture extends Re {
@@ -450,8 +442,8 @@ public abstract class Re implements Comparable<Re> {
         }
 
         @Override
-        protected ReCon typeTag() {
-            return re.typeTag(); // masquerade as underlying
+        protected Kind kind() {
+            return re.kind(); // masquerade as underlying
         }
 
         @Override
@@ -473,17 +465,22 @@ public abstract class Re implements Comparable<Re> {
         public Re stripCaptures() {
             return re.stripCaptures();
         }
+
+        @Override
+        public int hashCode() { return re.hashCode(); }
     }
 
+    @Override
     public Re alt(Re rhs) { return Branch.alt(this, rhs); }
+
+    @Override
     public Re seq(Re rhs) { return Branch.seq(this, rhs); }
-    public Re many() { return range(0, Rep.INF); }
-    public Re some() { return range(1, Rep.INF); }
+
+    @Override
     public Re range(int min, int max) { return Rep.from(min, max, this); }
-    public Re opt() { return range(0, 1); }
 
     public boolean isEmpty() { return this == Lit.EMPTY; }
-    public boolean isVoid() { return this == Void.val; }
+    public boolean isVoid() { return this == CharSet.NONE; }
     public boolean isEmptyOrVoid() { return isEmpty() || isVoid(); }
     public boolean isCapture() { return fromCapture() != null; }
 
@@ -491,16 +488,25 @@ public abstract class Re implements Comparable<Re> {
 
     protected  abstract String toPattern(int prec);
 
-    public String fromLit() { return null; }
-    public Branch fromAltNoCapture() { return null; }
-    public Branch fromSeqNoCapture() { return null; }
-    public Capture fromCapture() { return null; }
+    protected String fromLit() { return null; }
+    protected Branch fromBranchNoCapture() { return null; }
+    protected Branch fromAltNoCapture() {
+        var br = fromBranchNoCapture();
+        return br == null || br.isSeq ? null : br;
+    }
+    protected Branch fromSeqNoCapture() {
+        var br = fromBranchNoCapture();
+        return br == null || !br.isSeq ? null : br;
+    }
+    protected CharSet fromCharSetNoCapture() { return null; }
+    protected int fromSingletonCharSetNoCapture() { return Integer.MIN_VALUE; }
+    protected Capture fromCapture() { return null; }
 
     public abstract String litPrefix();
 
     public abstract boolean matchesEmpty();
 
-    protected abstract ReCon typeTag();
+    protected abstract Kind kind();
 
     protected abstract <R> R visit(Visitor<R> vis);
 
@@ -514,17 +520,17 @@ public abstract class Re implements Comparable<Re> {
             return 1;
         var lhs = this.unwrapCapture();
         var rhs = rhs0.unwrapCapture();
-        var ord = lhs.typeTag().compareTo(rhs.typeTag());
+        var ord = lhs.kind().compareTo(rhs.kind());
         if (ord != 0) return ord;
         return lhs.visit(new Visitor<>() {
             @Override
-            public Integer visit(Branch b) {
-                return b.compareRe((Branch) rhs);
+            public Integer visit(Branch br) {
+                return br.compareRe((Branch) rhs);
             }
 
             @Override
-            public Integer visit(Rep r) {
-                return r.compareRe((Rep) rhs);
+            public Integer visit(Rep rep) {
+                return rep.compareRe((Rep) rhs);
             }
 
             @Override
@@ -533,17 +539,12 @@ public abstract class Re implements Comparable<Re> {
             }
 
             @Override
-            public Integer visit(Void v) {
-                return 0;
+            public Integer visit(CharSet cs) {
+                return cs.compareToCharSet((CharSet) rhs);
             }
 
             @Override
-            public Integer visit(CharSet c) {
-                return c.compareToCharSet((CharSet) rhs);
-            }
-
-            @Override
-            public Integer visit(Capture c) {
+            public Integer visit(Capture cap) {
                 throw new IllegalStateException("BUG");
             }
         });
@@ -570,37 +571,17 @@ public abstract class Re implements Comparable<Re> {
     }
 
     @Override
-    public int hashCode() {
-        return visitIgnoreCapture(new Visitor<>() {
-            @Override
-            public Integer visit(Branch b) {
-                return Objects.hash(b.isSeq, b.a, b.b);
-            }
+    public abstract int hashCode();
 
-            @Override
-            public Integer visit(Rep r) {
-                return Objects.hash(r.min, r.max, r.re);
-            }
+    @Override
+    public Re fromLit(String lit) { return Lit.from(lit); }
 
-            @Override
-            public Integer visit(Lit l) {
-                return Objects.hash(l.val);
-            }
+    @Override
+    public Re fromChar(int cp) { return CharSet.setFromChar(cp); }
 
-            @Override
-            public Integer visit(Void v) {
-                return System.identityHashCode(v);
-            }
+    @Override
+    public Re asEmpty() { return Lit.EMPTY; }
 
-            @Override
-            public Integer visit(CharSet c) {
-                throw new IllegalStateException("BUG");
-            }
-
-            @Override
-            public Integer visit(Capture c) {
-                throw new IllegalStateException("BUG");
-            }
-        });
-    }
+    @Override
+    public Re asVoid() { return CharSet.NONE; }
 }

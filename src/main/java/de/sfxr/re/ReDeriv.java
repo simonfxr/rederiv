@@ -9,21 +9,21 @@ public class ReDeriv {
     public static Re deriv(Re re, int ch) {
         return re.visitIgnoreCapture(new Re.Visitor<Re>() {
             @Override
-            public Re visit(Re.Branch b) {
+            public Re visit(Re.Branch br) {
                 // d_a (r s) = (d_a r) s + nu(r) d_a s
-                if (b.isSeq) {
-                    var d = deriv(b.a, ch).seq(b.b);
-                    if (b.a.matchesEmpty())
-                        d = d.alt(deriv(b.b, ch));
+                if (br.isSeq) {
+                    var d = deriv(br.a, ch).seq(br.b);
+                    if (br.a.matchesEmpty())
+                        d = d.alt(deriv(br.b, ch));
                     return d;
                 }
 
                 // d_a (r + s) = d_a r + d_a s
-                return deriv(b.a, ch).alt(deriv(b.b, ch));
+                return deriv(br.a, ch).alt(deriv(br.b, ch));
             }
 
             @Override
-            public Re visit(Re.Rep r) {
+            public Re visit(Re.Rep rep) {
                 // first:
                 // n > 1: d_a (r{n}) = d_a (r r{n-1}) = d_a r r{n - 1} + nu(r) d_a r{n - 1}
                 // if nu(r) = VOID: d_a r r{n - 1}
@@ -56,81 +56,73 @@ public class ReDeriv {
                 //               = d_a r (r{0, m - 1} + r{0, m - n - 1})
                 //               = d_a r r{0, m - 1}
 
-                var diff = deriv(r.re, ch);
-                if (r.re.matchesEmpty()) {
-                    return diff.range(0, Re.Rep.sub(r.max, 1));
-                } else {
-                    return diff.range(Integer.max(0, r.min - 1), Re.Rep.sub(r.max, 1));
-                }
+                var n = rep.re.matchesEmpty() ? 0 : Integer.max(0, rep.min - 1);
+                var m = Re.Rep.sub(rep.max, 1);
+                return deriv(rep.re, ch).seq(rep.re.range(n, m));
             }
 
             @Override
             public Re visit(Re.Lit l) {
-                if (l.val.codePointAt(0) == ch)
+                if (!l.val.isEmpty() && l.val.codePointAt(0) == ch)
                     return Re.Lit.from(l.val.substring(Character.charCount(ch)));
-                return Re.Void.val;
+                return CharSet.NONE;
             }
 
             @Override
-            public Re visit(Re.Void v) {
-                return Re.Void.val;
+            public Re visit(CharSet cs) {
+                return cs.containsChar(ch) ? Re.Lit.EMPTY : CharSet.NONE;
             }
 
             @Override
-            public Re visit(CharSet c) {
-                return c.containsChar(ch) ? Re.Lit.EMPTY : Re.Void.val;
-            }
-
-            @Override
-            public Re visit(Re.Capture c) {
+            public Re visit(Re.Capture cap) {
                 throw new IllegalStateException("BUG");
             }
         });
     }
 
     public static Set<CharSet> intersections(Set<CharSet> r, Set<CharSet> s) {
+        if (s.size() < r.size()) {
+            var t = s; s = r; r = t;
+        }
         var u = new HashSet<CharSet>();
-        for (var x : r) for (var y : s)
-            u.add(x.intersect(y));
+        for (var x : r) {
+            if (x.isEmptySet()) u.add(x);
+            else for (var y : s) u.add(x.intersect(y));
+        }
         return u;
     }
 
-    public static Set<CharSet> equivs(Re re) {
-        return re.visitIgnoreCapture(new Re.Visitor<>() {
-            @Override
-            public Set<CharSet> visit(Re.Branch b) {
-                var cr = equivs(b.a);
-                if (b.isSeq && !b.a.matchesEmpty())
-                    return cr;
-                return intersections(cr, equivs(b.b));
-            }
+    private final static Re.Visitor<Set<CharSet>> equivsVis = new Re.Visitor<>() {
+        @Override
+        public Set<CharSet> visit(Re.Branch br) {
+            var cr = equivs(br.a);
+            if (br.isSeq && !br.a.matchesEmpty())
+                return cr;
+            return intersections(cr, equivs(br.b));
+        }
 
-            @Override
-            public Set<CharSet> visit(Re.Rep r) {
-                return equivs(r.re);
-            }
+        @Override
+        public Set<CharSet> visit(Re.Rep rep) {
+            return equivs(rep.re);
+        }
 
-            @Override
-            public Set<CharSet> visit(Re.Lit l) {
-                if (l.isEmpty())
-                    return Collections.singleton(CharSet.ANY);
-                return visit(CharSet.from(l.val.codePointAt(0)));
-            }
+        @Override
+        public Set<CharSet> visit(Re.Lit l) {
+            if (l.isEmpty())
+                return Collections.singleton(CharSet.ANY);
+            return visit(CharSet.setFromChar(l.val.codePointAt(0)));
+        }
 
-            @Override
-            public Set<CharSet> visit(Re.Void v) {
-                throw new IllegalStateException();
-            }
+        @Override
+        public Set<CharSet> visit(CharSet cs) {
+            return Set.of(cs, cs.complement());
+        }
 
-            @Override
-            public Set<CharSet> visit(CharSet c) {
-                return Set.of(c, c.complement());
-            }
+        @Override
+        public Set<CharSet> visit(Re.Capture cap) {
+            throw new IllegalStateException("BUG");
+        }
+    };
 
-            @Override
-            public Set<CharSet> visit(Re.Capture c) {
-                throw new IllegalStateException("BUG");
-            }
-        });
-    }
+    public static Set<CharSet> equivs(Re re) { return re.visitIgnoreCapture(equivsVis); }
 }
