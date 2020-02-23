@@ -1,8 +1,6 @@
 build/
 .gradle
 .idea/
-java-re.iml
-java-re.ipr
-java-re.iws
-java-re.main.iml
-java-re.test.iml
+rederiv.iml
+rederiv.ipr
+rederiv.iws
