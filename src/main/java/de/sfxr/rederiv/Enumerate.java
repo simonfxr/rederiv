@@ -122,7 +122,7 @@ public class Enumerate {
 
     public static Iterable<String> repeatUpTo(int n, Iterable<String> xs) {
         if (n == 0) return List.of("");
-        return cons("", cross(xs, () -> repeatUpTo(Re.Rep.sub(n, 1), xs).iterator()));
+        return cons("", cross(xs, () -> repeatUpTo(ReAlg.cardSub(n, 1), xs).iterator()));
     }
 
     public static Iterable<String> enumerate(Re re) {
@@ -137,7 +137,7 @@ public class Enumerate {
                     @Override
                     public Iterable<String> visit(Re.Rep rep) {
                         var xs = enumerate(rep.re);
-                        var ys = repeatUpTo(Re.Rep.sub(rep.max, rep.min), xs);
+                        var ys = repeatUpTo(ReAlg.cardSub(rep.max, rep.min), xs);
                         if (rep.min == 0) return xs;
                         List<Iterable<String>> ss = new ArrayList<>();
                         for (int i = 0; i < rep.min; ++i) ss.add(xs);

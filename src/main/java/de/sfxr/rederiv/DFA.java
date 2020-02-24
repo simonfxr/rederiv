@@ -69,7 +69,7 @@ public class DFA {
         }
 
         private void explore(Re q) {
-            for (var S : ReDeriv.equivs(q)) buildRec(q, S);
+            for (var S : ReDeriv.derivClasses(q)) buildRec(q, S);
         }
 
         public void build(Re q) {

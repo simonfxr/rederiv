@@ -1,6 +1,7 @@
 package de.sfxr.rederiv;
 
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 public abstract class Re implements ReAlg<Re> {
@@ -186,30 +187,11 @@ public abstract class Re implements ReAlg<Re> {
 
         private Rep(int min, int max, Re re) {
             if (min < 0 || min > max) throw new IllegalArgumentException();
-            if (min == INF_RANGE) throw new IllegalArgumentException();
+            if (min == INF_CARD) throw new IllegalArgumentException();
             this.min = min;
             this.max = max;
             if (min == 0 && max == 0) throw new RuntimeException("BUG: should not happend");
             this.re = Objects.requireNonNull(re);
-        }
-
-        static <T> T throwing(RuntimeException e) {
-            throw e;
-        }
-
-        public static int sub(int a, int b) {
-            return a == INF_RANGE ? a : a - b;
-        }
-
-        public static int mult(int a, int b) {
-            if (a < 0 || b < 0) throw new IllegalArgumentException();
-            return a == INF_RANGE || b == INF_RANGE
-                    ? INF_RANGE
-                    : a < Integer.MAX_VALUE / b
-                            ? a * b
-                            : throwing(
-                                    new IllegalArgumentException(
-                                            "Overflow in multiplicity product"));
         }
 
         public static Re from(int min, int max, Re re) {
@@ -277,22 +259,22 @@ public abstract class Re implements ReAlg<Re> {
 
             // x{0, b}{n, m} = x{0, b * m}
             // x{1, b}{n, m} = x{n, m} x{0, b - 1}{n, m} = x{n, b * m}
-            if (a == 0 || a == 1) return new Rep(a * n, mult(b, m), rep.re);
+            if (a == 0 || a == 1) return new Rep(a * n, ReAlg.cardMul(b, m), rep.re);
 
             // x{a, INF}{n, m} = x{a * n, INF}
-            if (b == INF_RANGE)
-                return new Rep(a * n, INF_RANGE, rep.re); // FIXME: handler overflow in next line
+            if (b == INF_CARD)
+                return new Rep(a * n, INF_CARD, rep.re); // FIXME: handler overflow in next line
 
             // x{a}{n, m} = x{a * n, a * m}
             if (a == b) // FIXME: overflow...
-            return new Rep(a * n, mult(a, m), rep.re);
+            return new Rep(a * n, ReAlg.cardMul(a, m), rep.re);
 
             // if b + 1 >= 2 a
             // x{a, b}{0, m} = 1 + x{a, m * b}
             if (n == 0 && b >= 2 * a - 1) {
-                if (rep.re.matchesEmpty()) return new Rep(a, mult(m, b), rep.re);
+                if (rep.re.matchesEmpty()) return new Rep(a, ReAlg.cardMul(m, b), rep.re);
                 else if (m != 1) // if m == 1 this would lead to endless recursion
-                return Lit.EMPTY.alt(rep.re.range(a, mult(m, b)));
+                return Lit.EMPTY.alt(rep.re.range(a, ReAlg.cardMul(m, b)));
             }
 
             // general case
@@ -302,7 +284,7 @@ public abstract class Re implements ReAlg<Re> {
         @Override
         public String toPattern(int prec) {
             var multiplicity =
-                    max == INF_RANGE
+                    max == INF_CARD
                             ? (min == 0 ? "*" : min == 1 ? "+" : "{" + min + ",}")
                             : min == max
                                     ? (min == 1 ? "?" : "{" + min + "}")
@@ -322,7 +304,7 @@ public abstract class Re implements ReAlg<Re> {
 
         @Override
         public String toString() {
-            return "Rep{ " + re + "{" + min + "," + (max == INF_RANGE ? "INF" : max) + "} }";
+            return "Rep{ " + re + "{" + min + "," + (max == INF_CARD ? "INF" : max) + "} }";
         }
 
         @Override
@@ -678,5 +660,15 @@ public abstract class Re implements ReAlg<Re> {
     @Override
     public Re asVoid() {
         return CharSet.NONE;
+    }
+
+    @Override
+    public Re deriv(int cp) {
+        return ReDeriv.deriv(this, cp);
+    }
+
+    @Override
+    public Set<CharSet> derivClasses() {
+        return ReDeriv.derivClasses(this);
     }
 }

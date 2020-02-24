@@ -60,7 +60,7 @@ public class ReDeriv {
                         //               = d_a r r{0, m - 1}
 
                         var n = rep.re.matchesEmpty() ? 0 : Integer.max(0, rep.min - 1);
-                        var m = Re.Rep.sub(rep.max, 1);
+                        var m = ReAlg.cardSub(rep.max, 1);
                         return deriv(rep.re, ch).seq(rep.re.range(n, m));
                     }
 
@@ -97,18 +97,18 @@ public class ReDeriv {
         return u;
     }
 
-    private static final Re.Visitor<Set<CharSet>> equivsVis =
+    private static final Re.Visitor<Set<CharSet>> derivClassesVis =
             new Re.Visitor<>() {
                 @Override
                 public Set<CharSet> visit(Re.Branch br) {
-                    var cr = equivs(br.a);
+                    var cr = derivClasses(br.a);
                     if (br.isSeq && !br.a.matchesEmpty()) return cr;
-                    return intersections(cr, equivs(br.b));
+                    return intersections(cr, derivClasses(br.b));
                 }
 
                 @Override
                 public Set<CharSet> visit(Re.Rep rep) {
-                    return equivs(rep.re);
+                    return derivClasses(rep.re);
                 }
 
                 @Override
@@ -128,7 +128,8 @@ public class ReDeriv {
                 }
             };
 
-    public static Set<CharSet> equivs(Re re) {
-        return re.visitIgnoreCapture(equivsVis);
+    public static Set<CharSet> derivClasses(Re re) {
+        return re.visitIgnoreCapture(derivClassesVis);
     }
+
 }
