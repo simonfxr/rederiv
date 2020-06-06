@@ -1,5 +1,6 @@
 package de.sfxr.rederiv;
 
+import de.sfxr.rederiv.Re.Neg;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -11,15 +12,19 @@ public class ReDeriv {
                 new Re.Visitor<Re>() {
                     @Override
                     public Re visit(Re.Branch br) {
-                        // d_a (r s) = (d_a r) s + nu(r) d_a s
-                        if (br.isSeq) {
-                            var d = deriv(br.a, ch).seq(br.b);
-                            if (br.a.matchesEmpty()) d = d.alt(deriv(br.b, ch));
-                            return d;
+                        switch (br.kind) {
+                            case SEQ:
+                                // d_a (r s) = (d_a r) s + nu(r) d_a s
+                                var d = deriv(br.a, ch).seq(br.b);
+                                if (br.a.matchesEmpty()) d = d.alt(deriv(br.b, ch));
+                                return d;
+                            case ALT:
+                                // d_a (r + s) = d_a r + d_a s
+                                return deriv(br.a, ch).alt(deriv(br.b, ch));
+                            case IS:
+                                return deriv(br.a, ch).isect(deriv(br.b, ch));
                         }
-
-                        // d_a (r + s) = d_a r + d_a s
-                        return deriv(br.a, ch).alt(deriv(br.b, ch));
+                        return Re.unreachable();
                     }
 
                     @Override
@@ -80,6 +85,11 @@ public class ReDeriv {
                     public Re visit(Re.Capture cap) {
                         throw new IllegalStateException("BUG");
                     }
+
+                    @Override
+                    public Re visit(Neg neg) {
+                        return deriv(re, ch).neg();
+                    }
                 });
     }
 
@@ -102,8 +112,14 @@ public class ReDeriv {
                 @Override
                 public Set<CharSet> visit(Re.Branch br) {
                     var cr = derivClasses(br.a);
-                    if (br.isSeq && !br.a.matchesEmpty()) return cr;
-                    return intersections(cr, derivClasses(br.b));
+                    switch (br.kind) {
+                        case SEQ:
+                            if (!br.a.matchesEmpty()) return cr;
+                        case ALT:
+                        case IS:
+                            return intersections(cr, derivClasses(br.b));
+                    }
+                    return Re.unreachable();
                 }
 
                 @Override
@@ -126,10 +142,14 @@ public class ReDeriv {
                 public Set<CharSet> visit(Re.Capture cap) {
                     throw new IllegalStateException("BUG");
                 }
+
+                @Override
+                public Set<CharSet> visit(Re.Neg neg) {
+                    return derivClasses(neg.re);
+                }
             };
 
     public static Set<CharSet> derivClasses(Re re) {
         return re.visitIgnoreCapture(derivClassesVis);
     }
-
 }

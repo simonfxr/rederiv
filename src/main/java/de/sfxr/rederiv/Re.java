@@ -10,12 +10,16 @@ public abstract class Re implements ReAlg<Re> {
         Lit,
         CharSet,
         Alt,
+        Is,
         Seq,
         Rep,
+        Neg
     }
 
     public interface Visitor<R> {
         R visit(Branch br);
+
+        R visit(Neg neg);
 
         R visit(Rep rep);
 
@@ -26,19 +30,30 @@ public abstract class Re implements ReAlg<Re> {
         R visit(Capture cap);
     }
 
+    public static <R> R unreachable() {
+        throw new IllegalStateException("UNREACHABLE");
+    }
+
     public static final class Branch extends Re {
-        public final boolean isSeq;
+
+        enum Kind {
+            ALT,
+            IS,
+            SEQ
+        };
+
+        public final Kind kind;
         public final Re a, b;
         private final int capCount;
         private final boolean matchesEmpty;
 
-        private Branch(boolean isSeq, int caps, Re a, Re b) {
-            this.isSeq = isSeq;
+        private Branch(Kind kind, int caps, Re a, Re b) {
+            this.kind = kind;
             this.a = Objects.requireNonNull(a);
             this.b = Objects.requireNonNull(b);
             this.capCount = caps;
             this.matchesEmpty =
-                    isSeq
+                    kind != Kind.ALT
                             ? a.matchesEmpty() && b.matchesEmpty()
                             : a.matchesEmpty() || b.matchesEmpty();
         }
@@ -69,7 +84,7 @@ public abstract class Re implements ReAlg<Re> {
                 b = alt(aalt.b, b);
             }
             ;
-            return new Branch(false, caps, a, b);
+            return new Branch(Kind.ALT, caps, a, b);
         }
 
         public static Re seq(Re a, Re b) {
@@ -91,31 +106,42 @@ public abstract class Re implements ReAlg<Re> {
                 a = aseq.a;
                 b = seq(aseq.b, b);
             }
-            return new Branch(true, caps, a, b);
+            return new Branch(Kind.SEQ, caps, a, b);
+        }
+
+        public static Re isect(Re a, Re b) {
+            return null;
         }
 
         @Override
         protected String toPattern(int prec) {
-            if (isSeq) {
-                return Re.parenWhen(prec > 9, a.toPattern(9) + b.toPattern(9));
-            } else {
-                return Re.parenWhen(prec > 8, a.toPattern(8) + "|" + b.toPattern(8));
+            switch (kind) {
+                case SEQ:
+                    return Re.parenWhen(prec > 9, a.toPattern(9) + b.toPattern(9));
+                case ALT:
+                    return Re.parenWhen(prec > 7, a.toPattern(7) + "|" + b.toPattern(7));
+                case IS:
+                    return Re.parenWhen(prec > 8, a.toPattern(8) + "&" + b.toPattern(8));
             }
+            return unreachable();
         }
 
         @Override
         public String litPrefix() {
-            if (isSeq) {
-                var alit = a.fromLit();
-                return alit != null ? alit + b.litPrefix() : a.litPrefix();
-            } else {
-                var pa = a.litPrefix();
-                var pb = b.litPrefix();
-                var n = Integer.min(pa.length(), pb.length());
-                int i;
-                for (i = 0; i < n && pa.charAt(i) == pb.charAt(i); ++i) {}
-                return pa.substring(0, i);
+            switch (kind) {
+                case SEQ:
+                    var alit = a.fromLit();
+                    return alit != null ? alit + b.litPrefix() : a.litPrefix();
+                case ALT:
+                case IS:
+                    var pa = a.litPrefix();
+                    var pb = b.litPrefix();
+                    var n = Integer.min(pa.length(), pb.length());
+                    int i;
+                    for (i = 0; i < n && pa.charAt(i) == pb.charAt(i); ++i) {}
+                    return pa.substring(0, i);
             }
+            return unreachable();
         }
 
         @Override
@@ -126,21 +152,22 @@ public abstract class Re implements ReAlg<Re> {
         @Override
         public String toString() {
             var sb = new StringBuilder();
-            sb.append(isSeq ? "Seq {" : "Alt {");
+            sb.append(kind.toString());
+            sb.append(" {");
             Branch br = this, obr = this;
-            for (; br != null && br.isSeq == isSeq; obr = br, br = br.b.fromBranchNoCapture())
+            for (; br != null && br.kind == kind; obr = br, br = br.b.fromBranchNoCapture())
                 sb.append(br.a).append(", ");
             return sb.append(br == null ? obr.b : br).append('}').toString();
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(isSeq, a, b);
+            return Objects.hash(kind, a, b);
         }
 
         @Override
         public int compareToRe(Branch rhs) {
-            int r = Boolean.compare(isSeq, rhs.isSeq);
+            int r = kind.compareTo(rhs.kind);
             if (r != 0) return r;
             r = a.compareTo(rhs.a);
             if (r != 0) return r;
@@ -153,8 +180,16 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        protected Kind kind() {
-            return isSeq ? Kind.Seq : Kind.Alt;
+        protected Re.Kind kind() {
+            switch (kind) {
+                case SEQ:
+                    return Re.Kind.Seq;
+                case IS:
+                    return Re.Kind.Is;
+                case ALT:
+                    return Re.Kind.Alt;
+            }
+            return unreachable();
         }
 
         @Override
@@ -172,7 +207,16 @@ public abstract class Re implements ReAlg<Re> {
             if (capCount == 0) return this;
             var aa = a.stripCaptures();
             var bb = b.stripCaptures();
-            return aa == a && bb == b ? this : isSeq ? seq(aa, bb) : alt(aa, bb);
+            if (aa == a && bb == b) return this;
+            switch (kind) {
+                case ALT:
+                    return alt(aa, bb);
+                case SEQ:
+                    return seq(aa, bb);
+                case IS:
+                    return isect(aa, bb);
+            }
+            return unreachable();
         }
 
         @Override
@@ -195,16 +239,24 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         public static Re from(int min, int max, Re re) {
-            if (min == 0 && max == 0) {
-                if (re.isVoid()) throw new IllegalArgumentException();
-                return re.asEmpty();
+
+            if (min < 0 || min > max) throw new IllegalArgumentException();
+
+            if (re.isVoid()) return re.asVoid();
+
+            if (min == 0 && max == 0) return re.asEmpty();
+
+            if (re.isEmpty() || (min == 1 && max == 1)) return re;
+
+            if (min == Integer.MAX_VALUE) return re.asVoid();
+
+            {
+                var cs = re.fromCharSetNoCapture();
+                if (cs == CharSet.ANYTHING && min == 0 && max == Integer.MAX_VALUE) return ANYTHING;
             }
-            if (re.isEmptyOrVoid() || (min == 1 && max == 1)) return re;
 
             if (!(re instanceof Rep)) return new Rep(min, max, re);
             Rep rep = (Rep) re;
-
-            if (min < 0 || min > max) throw new IllegalArgumentException();
 
             var a = rep.min;
             var b = rep.max;
@@ -216,18 +268,20 @@ public abstract class Re implements ReAlg<Re> {
             // x{0, m} = 0 + x + x^2 + ... + x^n
             // x{n, m} = x{n} x{0, m - n} = x^n (1 + x + x^2 ... x^n)
             // x{a, b}{n} = (x{a} x{0, b - a}){n} = x{a * n} x{0, b - a}{n}
-            //                                    = x{a * n} x{0, (b - a) * n}
-            //                                    = x{a * n, b * n}
+            // = x{a * n} x{0, (b - a) * n}
+            // = x{a * n, b * n}
 
             // x{a}{n, m} = x{a}{n} x{a}{0, m - n} = x{a * n} x{a}{0, m - n}
             // x{a, b}{n, m} = x{a, b}{n} x{a, b}{0, m - n}
-            //               = x{a * n, b * n} (x{a} x{0, b - a}
+            // = x{a * n, b * n} (x{a} x{0, b - a}
 
             // x{a, b}{n} = x{a * n, b * n}
-            // x{a}{0, n} = 1 + x^a + x^(2 *a) + x^(3 a) .. x^(n a) = (x{a * (n + 1)} - 1) / (x{a} -
+            // x{a}{0, n} = 1 + x^a + x^(2 *a) + x^(3 a) .. x^(n a) = (x{a * (n + 1)} - 1) /
+            // (x{a} -
             // 1)
 
-            // x{a, b}{0, m} = E + x{a, b} + x{a, b}{2} + ... + x{a, b}{m} = E + x{a, b} + x{2 a, 2
+            // x{a, b}{0, m} = E + x{a, b} + x{a, b}{2} + ... + x{a, b}{m} = E + x{a, b} +
+            // x{2 a, 2
             // b} + ... + x{m * a, m * b}
             // if b + 1 >= 2 a:
             // x{a, b}{0, m} = 1 + x{a, m * b}
@@ -239,19 +293,19 @@ public abstract class Re implements ReAlg<Re> {
             // x{0, n}{k} = x{0, n * k}
 
             // x{a, b}{n, m} = x{a, b}{n} x{a, b}{0, m - n}
-            //               = (x{a} x{0, b - a}){n} x{a, b}{0, m - n}
-            //               = (
+            // = (x{a} x{0, b - a}){n} x{a, b}{0, m - n}
+            // = (
 
             // x{a}{n} = x{a * n}
-            // x{a}{n, m} = x{a}{n}  x{a}{n + 1} | ...
-            //             = x{a}{n} (E | x{a} | x{2 * a} ...)
-            //              = x{a*n} x{a}{0, m - n}
+            // x{a}{n, m} = x{a}{n} x{a}{n + 1} | ...
+            // = x{a}{n} (E | x{a} | x{2 * a} ...)
+            // = x{a*n} x{a}{0, m - n}
             //
             // x{0, b}{n, m} = x{0, b * m}
             // x{1, b}
             //
             // x{a, b}{n, m} = (x{a} x{0, b-a}){n, m} = x{a}{n, m} x{0, b-a}{n, m}
-            //                                        = x{a}{n, m} x{0, (b - a) * m}
+            // = x{a}{n, m} x{0, (b - a) * m}
             // x{a, b}{0, m} = x{a}{0, m} x{0, (b - a) * m} =
             // x{0, b} x{n, m} = x{n, b + m}
 
@@ -263,7 +317,7 @@ public abstract class Re implements ReAlg<Re> {
 
             // x{a, INF}{n, m} = x{a * n, INF}
             if (b == INF_CARD)
-                return new Rep(a * n, INF_CARD, rep.re); // FIXME: handler overflow in next line
+                return new Rep(a * n, INF_CARD, rep.re); // FIXME: handle overflow in next line
 
             // x{a}{n, m} = x{a * n, a * m}
             if (a == b) // FIXME: overflow...
@@ -423,6 +477,78 @@ public abstract class Re implements ReAlg<Re> {
         }
     }
 
+    public static final class Neg extends Re {
+        public final Re re;
+
+        private Neg(Re re) {
+            this.re = Objects.requireNonNull(re);
+        }
+
+        public static Re from(Re re) {
+            var neg = re.fromNegNoCapture();
+            if (neg != null) return neg;
+            var cs = re.fromCharSetNoCapture();
+            if (cs != null) return cs.complement();
+            if (re.isVoid()) return re.asAnything();
+            return new Neg(re);
+        }
+
+        @Override
+        protected String toPattern(int prec) {
+            return "!" + re.toPattern(0);
+        }
+
+        @Override
+        public String litPrefix() {
+            return "";
+        }
+
+        @Override
+        public boolean matchesEmpty() {
+            return !re.matchesEmpty();
+        }
+
+        @Override
+        protected Kind kind() {
+            return Kind.Neg;
+        }
+
+        @Override
+        protected <R> R visit(Visitor<R> vis) {
+            return vis.visit(this);
+        }
+
+        @Override
+        public String toString() {
+            return "Neg{" + re + '}';
+        }
+
+        @Override
+        public Re stripCaptures() {
+            return from(re.stripCaptures());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(kind(), re.hashCode());
+        }
+
+        @Override
+        protected int compareToRe(Re re) {
+            return -re.compareToRe(this);
+        }
+
+        @Override
+        protected int compareToRe(Neg re) {
+            return this.re.compareTo(re.re);
+        }
+
+        @Override
+        protected Neg fromNegNoCapture() {
+            return this;
+        }
+    }
+
     public static final class Capture extends Re {
         public final Re re;
 
@@ -513,6 +639,16 @@ public abstract class Re implements ReAlg<Re> {
     }
 
     @Override
+    public Re isect(Re rhs) {
+        return Branch.isect(this, rhs);
+    }
+
+    @Override
+    public Re neg() {
+        return Neg.from(this);
+    }
+
+    @Override
     public Re range(int min, int max) {
         return Rep.from(min, max, this);
     }
@@ -549,12 +685,17 @@ public abstract class Re implements ReAlg<Re> {
 
     protected Branch fromAltNoCapture() {
         var br = fromBranchNoCapture();
-        return br == null || br.isSeq ? null : br;
+        return br == null || br.kind == Branch.Kind.ALT ? null : br;
     }
 
     protected Branch fromSeqNoCapture() {
         var br = fromBranchNoCapture();
-        return br == null || !br.isSeq ? null : br;
+        return br == null || br.kind == Branch.Kind.SEQ ? null : br;
+    }
+
+    protected Branch fromISectNoCapture() {
+        var br = fromBranchNoCapture();
+        return br == null || br.kind == Branch.Kind.IS ? null : br;
     }
 
     protected CharSet fromCharSetNoCapture() {
@@ -563,6 +704,10 @@ public abstract class Re implements ReAlg<Re> {
 
     protected int fromSingletonCharSetNoCapture() {
         return -1;
+    }
+
+    protected Neg fromNegNoCapture() {
+        return null;
     }
 
     protected Capture fromCapture() {
@@ -598,6 +743,10 @@ public abstract class Re implements ReAlg<Re> {
     }
 
     protected int compareToRe(CharSet re) {
+        return compareByKind(re);
+    }
+
+    protected int compareToRe(Neg re) {
         return compareByKind(re);
     }
 
@@ -670,5 +819,17 @@ public abstract class Re implements ReAlg<Re> {
     @Override
     public Set<CharSet> derivClasses() {
         return ReDeriv.derivClasses(this);
+    }
+
+    @Override
+    public Re anyChar() {
+        return CharSet.ANY;
+    }
+
+    public static final Re ANYTHING = new Rep(0, Integer.MAX_VALUE, CharSet.ANY);
+
+    @Override
+    public Re asAnything() {
+        return ANYTHING;
     }
 }

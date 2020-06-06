@@ -22,6 +22,10 @@ public interface ReAlg<R extends ReAlg<R>> extends Comparable<R> {
 
     R seq(R re);
 
+    R isect(R re);
+
+    R neg();
+
     R range(int min, int max);
 
     default R repeat(int n) {
@@ -50,12 +54,19 @@ public interface ReAlg<R extends ReAlg<R>> extends Comparable<R> {
 
     R fromChar(int cp);
 
+    R anyChar();
+
     default R fromChar(char ch) {
         return fromChar((int) ch);
     }
 
     default R asEmpty() {
         return fromLit("");
+    }
+
+    default R asAnything() {
+        // alternative: anyChar().many();
+        return asVoid().neg();
     }
 
     R deriv(int cp);

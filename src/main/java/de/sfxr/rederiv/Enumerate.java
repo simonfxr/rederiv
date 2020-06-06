@@ -120,6 +120,23 @@ public class Enumerate {
         return cross(xss.get(0), () -> cross(xss.subList(1, xss.size())).iterator());
     }
 
+    public static Iterable<String> intersections(Iterable<String> xs, Iterable<String> ys) {
+        throw new UnsupportedOperationException();
+    }
+
+    public static Iterable<String> intersections(List<Iterable<String>> xss) {
+        switch (xss.size()) {
+        case 0:
+            return Collections.emptyList();
+        case 1:
+            return xss.get(0);
+        case 2:
+            return intersections(xss.get(0), xss.get(1));
+        default:
+            return intersections(xss.get(0), () -> intersections(xss.subList(1, xss.size())).iterator());
+        }
+    }
+
     public static Iterable<String> repeatUpTo(int n, Iterable<String> xs) {
         if (n == 0) return List.of("");
         return cons("", cross(xs, () -> repeatUpTo(ReAlg.cardSub(n, 1), xs).iterator()));
@@ -131,7 +148,15 @@ public class Enumerate {
                     @Override
                     public Iterable<String> visit(Re.Branch br) {
                         var xss = Arrays.asList(enumerate(br.a), enumerate(br.b));
-                        return br.isSeq ? cross(xss) : interleave(xss);
+                        switch (br.kind) {
+                            case SEQ:
+                                return cross(xss);
+                            case ALT:
+                                return interleave(xss);
+                            case IS:
+                                return intersections(xss);
+                        }
+                        return Re.unreachable();
                     }
 
                     @Override
@@ -148,6 +173,11 @@ public class Enumerate {
                     @Override
                     public Iterable<String> visit(Re.Lit l) {
                         return List.of(l.val);
+                    }
+
+                    @Override
+                    public Iterable<String> visit(Re.Neg n) {
+                        throw new UnsupportedOperationException();
                     }
 
                     @Override

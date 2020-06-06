@@ -1,6 +1,10 @@
-build/
-.gradle
-.idea/
-rederiv.iml
-rederiv.ipr
-rederiv.iws
+/.classpath
+/.gradle
+/.idea/
+/.project
+/.settings/
+/bin/
+/build/
+/rederiv.iml
+/rederiv.ipr
+/rederiv.iws

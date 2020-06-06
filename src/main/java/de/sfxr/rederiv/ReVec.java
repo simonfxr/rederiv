@@ -26,6 +26,11 @@ public class ReVec<Re extends ReAlg<Re>> extends ForwardingList<Re> implements R
     }
 
     @Override
+    public ReVec<Re> isect(ReVec<Re> re) {
+        return zipped(re, ReAlg::isect);
+    }
+
+    @Override
     public ReVec<Re> range(int min, int max) {
         return mapped(re -> re.range(min, max));
     }
@@ -33,6 +38,11 @@ public class ReVec<Re extends ReAlg<Re>> extends ForwardingList<Re> implements R
     @Override
     public ReVec<Re> capture() {
         return mapped(ReAlg::capture);
+    }
+
+    @Override
+    public ReVec<Re> neg() {
+        return mapped(Re::neg);
     }
 
     @Override
@@ -84,6 +94,16 @@ public class ReVec<Re extends ReAlg<Re>> extends ForwardingList<Re> implements R
             if (r != 0) return r;
         }
         return Integer.compare(res.size(), rhs.res.size());
+    }
+
+    @Override
+    public ReVec<Re> asAnything() {
+        return mapped(Re::asAnything);
+    }
+
+    @Override
+    public ReVec<Re> anyChar() {
+        return mapped(Re::anyChar);
     }
 
     @Override
