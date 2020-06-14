@@ -2,9 +2,13 @@ package de.sfxr.rederiv;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import de.sfxr.rederiv.support.Checking;
 import java.util.*;
 
 final class DFABuilder {
+
+    private static final boolean CHECKING = Checking.isCheckingEnabled(DFABuilder.class);
+
     private Integer nextQ = 0;
     final BiMap<Re, Integer> Q = HashBiMap.create();
     // int -> (CharSet -> int)
@@ -29,11 +33,11 @@ final class DFABuilder {
 
     private void buildRec(Re q, CharSet S) {
         if (S.isEmptySet()) return;
-        System.out.println("q=" + q + ", S=" + S);
+        if (CHECKING) System.out.println("q=" + q + ", S=" + S);
         var qc = ReDeriv.deriv(q, S.pickOne());
-        System.out.println("qc=" + qc);
+        if (CHECKING) System.out.println("qc=" + qc);
         var qcI = Q.get(qc);
-        System.out.println("qcI=" + qcI);
+        if (CHECKING) System.out.println("qcI=" + qcI);
         if (!qc.isVoid()) {
             putDelta(putQ(q), S, qcI == null ? putQ(qc) : qcI);
             if (qcI == null) explore(qc);

@@ -6,10 +6,16 @@ import de.sfxr.rederiv.support.EnumerateTrie;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
+
+import de.sfxr.rederiv.support.TestUtil;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
 
 public class Enumerated {
+
+    static {
+        TestUtil.init();
+    }
 
     private static final ReBuilder re = ReBuilder.get();
     public static final List<Re> PATTERNS =
