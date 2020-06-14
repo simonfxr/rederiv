@@ -103,27 +103,22 @@ public abstract class CharSet extends Re implements Set<Integer> {
         @Override
         public IntervalSet<Void> toIntervalSet() {
             if (!complement) return chars;
-            if (chars.isEmpty()) return IntervalSet.of(Interval.of(0, 0x110000));
-            var ivs = new ArrayList<Interval<Void>>();
-            Interval<Void> prev = null;
-            for (var iv : chars.asList()) {
-                if (prev == null) ivs.add(Interval.of(0, iv.a));
-                else ivs.add(Interval.of(prev.b, iv.a));
-                prev = iv;
-            }
-            ivs.add(Interval.of(prev.b, 0x110000));
-            return IntervalSet.buildDestructive(ivs, null);
+            return IntervalSet.of(Interval.of(0, 0x110000)).difference(chars);
         }
 
         @Override
         public CharSet intersect(Sparse s) {
             if (s == this) return this;
             if (s == NONE || this == NONE) return NONE;
-            if (complement && s.complement)
-                return this.complement().union(s.complement()).complement();
+            if (complement && s.complement) return from(chars.union(s.chars, null), true);
             if (!complement && !s.complement) return from(chars.intersection(s.chars, null));
-            if (complement) return from(toIntervalSet().intersection(s.chars, null), false);
-            return from(s.toIntervalSet().intersection(chars, null), false);
+            var t = this;
+            if (t.complement) {
+                var u = t;
+                t = s;
+                s = u;
+            }
+            return from(t.chars.difference(s.chars), false);
         }
 
         @Override

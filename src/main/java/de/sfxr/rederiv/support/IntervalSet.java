@@ -131,7 +131,11 @@ public class IntervalSet<T> {
     }
 
     public Interval<T> get(int i) {
-        if (CHECKING) checkIndex(i);
+        return get(i, CHECKING);
+    }
+
+    public Interval<T> get(int i, boolean checking) {
+        if (checking) checkIndex(i);
         var x = v != null ? v[i] : null;
         return Interval.of(r[2 * i], r[2 * i + 1], x);
     }
@@ -155,7 +159,7 @@ public class IntervalSet<T> {
         return new AbstractList<>() {
             @Override
             public Interval<T> get(int index) {
-                return IntervalSet.this.get(index);
+                return IntervalSet.this.get(index, true);
             }
 
             @Override
@@ -163,6 +167,11 @@ public class IntervalSet<T> {
                 return n;
             }
         };
+    }
+
+    private void unsafePushInterval(Interval<T> iv) {
+        ensureCapacity(n + 1);
+        set(n++, iv);
     }
 
     private void pushInterval(Interval<T> iv, OrderedSemigroup<T> m) {
@@ -246,6 +255,41 @@ public class IntervalSet<T> {
         return buildSorted(ivs, m);
     }
 
+    // x.difference(y) = x \ y;
+    public IntervalSet<T> difference(IntervalSet<T> y) {
+        if (y.isEmpty()) return this;
+        var z = new IntervalSet<T>(0, v != null);
+        var x = this;
+
+        int i, j;
+        for (i = 0, j = 0; i < x.n && j < y.n; ) {
+            var xi = x.get(i);
+            var yj = y.get(j);
+            if (xi.b <= yj.a) {
+                z.unsafePushInterval(xi);
+                ++i;
+            } else if (yj.b <= xi.a) {
+                ++j;
+            } else {
+                // yj.a < xi.b
+                // xi.a < yj.b
+
+                var a = xi.a;
+                Interval<?> yk;
+                int k;
+                for (k = 0; k < y.n && (yk = y.get(k)).b <= xi.b; ++k, a = yk.a)
+                    z.unsafePushInterval(Interval.of(a, yk.a, xi.v));
+
+                if (k >= y.n) z.unsafePushInterval(Interval.of(a, xi.b, xi.v));
+                ++i;
+            }
+        }
+
+        for (; i < x.n; ++i) z.unsafePushInterval(x.get(i));
+
+        return z.check(null);
+    }
+
     public static <T> IntervalSet<T> buildDestructive(
             List<Interval<T>> ivs, OrderedSemigroup<T> m) {
         if (ivs.isEmpty()) return IntervalSet.empty();
@@ -264,10 +308,8 @@ public class IntervalSet<T> {
     public IntervalSet<T> intersection(IntervalSet<T> y, OrderedSemigroup<T> m) {
         var ivs = new ArrayList<Interval<T>>();
         var x = this;
-        var i = 0;
-        var j = 0;
 
-        while (i < x.n && j < y.n) {
+        for (int i = 0, j = 0; i < x.n && j < y.n; ++i) {
             while (j < y.n && y.get(j).b <= x.get(i).a) ++j;
             if (j >= y.n) break;
             // here: xi.a < yj.b
@@ -277,7 +319,6 @@ public class IntervalSet<T> {
             Interval<T> z;
             for (var k = j; k < y.n && (z = x.get(i).intersection(y.get(k), m)).isNonEmpty(); ++k)
                 ivs.add(z);
-            ++i;
         }
 
         return buildDestructive(ivs, m);
