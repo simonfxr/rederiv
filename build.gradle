@@ -6,7 +6,6 @@ plugins {
 allprojects{
     repositories {
         jcenter()
-       // maven { url "https://jitpack.io" }
     }
 }
 
@@ -24,8 +23,6 @@ test {
 }
 
 dependencies {
-    implementation 'com.koloboke:koloboke-api-jdk8:1.0.0'
-    implementation 'com.koloboke:koloboke-impl-jdk8:1.0.0'
     implementation 'com.google.guava:guava:28.2-jre'
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.1'

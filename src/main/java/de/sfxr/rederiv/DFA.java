@@ -1,144 +1,104 @@
 package de.sfxr.rederiv;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
-import com.koloboke.collect.map.IntObjMap;
-import com.koloboke.collect.map.ObjIntMap;
-import com.koloboke.collect.map.hash.HashIntObjMaps;
-import com.koloboke.collect.map.hash.HashObjIntMaps;
-import com.koloboke.collect.set.IntSet;
-import com.koloboke.collect.set.hash.HashIntSets;
+import de.sfxr.rederiv.support.IntervalSet;
+import de.sfxr.rederiv.support.OrderedSemigroup;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class DFA {
 
-    private final Builder builder = new Builder();
+    private final DFABuilder builder = new DFABuilder();
+
+    private final IntervalSet<Integer>[] trans;
+    private final int initial;
+
     private final Re re;
 
-    private DFA(Re re) {
+    private static int newState(int q, boolean accepting) {
+        return (q << 1) | (accepting ? 1 : 0);
+    }
+
+    private static int stateQ(int s) {
+        return s >>> 1;
+    }
+
+    private static boolean isAcceptingState(int s) {
+        return (s & 1) != 0;
+    }
+
+    private static int mkDFAState(DFABuilder builder, int q) {
+        return newState(q, builder.accepting.contains(q));
+    }
+
+    private static final OrderedSemigroup<Integer> INTS =
+            new OrderedSemigroup<Integer>() {
+                @Override
+                public int compare(Integer x, Integer y) {
+                    return Integer.compare(x, y);
+                }
+
+                @Override
+                public Integer apply(Integer x, Integer y) {
+                    if (x == y) return x;
+                    throw new IllegalStateException("IMPOSSIBLE");
+                }
+            };
+
+    private DFA(DFABuilder builder, Re re) {
+        this.trans = new IntervalSet[builder.Q.size()];
+        this.initial = newState(0, builder.accepting.contains(0));
         this.re = Objects.requireNonNull(re);
-        builder.build(re);
+
+        for (int i = 0; i < this.trans.length; ++i) {
+            var d = builder.delta.get(i);
+            if (d == null) {
+                trans[i] = IntervalSet.empty();
+            } else {
+                trans[i] =
+                        d.entrySet().stream()
+                                .map(
+                                        e ->
+                                                e.getKey()
+                                                        .toIntervalSet()
+                                                        .map(
+                                                                ignored ->
+                                                                        mkDFAState(
+                                                                                builder,
+                                                                                e.getValue()),
+                                                                INTS))
+                                .collect(
+                                        Collectors.reducing(
+                                                IntervalSet.<Integer>empty(),
+                                                (x, y) -> x.union(y, INTS)));
+            }
+        }
     }
 
     public boolean matches(String s) {
-        return builder.matches(s);
+        if (s == null) throw new NullPointerException();
+
+        var x = initial;
+        int cp;
+
+        for (int i = 0; !isAcceptingState(x); i += Character.charCount(cp)) {
+            if (i >= s.length()) return false;
+            cp = s.codePointAt(i);
+            var xx = trans[stateQ(x)].find(cp);
+            if (xx == null) return false;
+            x = xx;
+        }
+
+        return true;
     }
 
     public static DFA compile(Re re) {
-        return new DFA(re);
+        var builder = new DFABuilder();
+        builder.build(re);
+        return new DFA(builder, re);
     }
 
     @Override
     public String toString() {
         return builder.toString();
-    }
-
-    private static final class Builder {
-        private Integer nextQ = 0;
-        public final BiMap<Re, Integer> Q = HashBiMap.create();
-        public final IntObjMap<ObjIntMap<CharSet>> delta = HashIntObjMaps.newMutableMap();
-        public final IntSet accepting = HashIntSets.newMutableSet();
-
-        private int putQ(Re q) {
-            var old = Q.putIfAbsent(q, nextQ);
-            var ret = old != null ? old : nextQ++;
-            if (Q.get(q) != ret) throw new IllegalStateException();
-            return ret;
-        }
-
-        private void putDelta(int qI, CharSet S, int qcI) {
-            var t = delta.get(qI);
-            if (t == null) {
-                t = HashObjIntMaps.newMutableMap();
-                delta.put(qI, t);
-            }
-            t.put(S, qcI);
-        }
-
-        private void buildRec(Re q, CharSet S) {
-            if (S.isEmptySet()) return;
-            System.out.println("q=" + q + ", S=" + S);
-            var qc = ReDeriv.deriv(q, S.pickOne());
-            System.out.println("qc=" + qc);
-            var qcI = Q.get(qc);
-            System.out.println("qcI=" + qcI);
-            if (!qc.isVoid()) {
-                putDelta(putQ(q), S, qcI == null ? putQ(qc) : qcI);
-                if (qcI == null) explore(qc);
-            }
-        }
-
-        private void explore(Re q) {
-            for (var S : ReDeriv.derivClasses(q)) buildRec(q, S);
-        }
-
-        public void build(Re q) {
-            explore(q);
-            for (var ent : Q.entrySet()) {
-                if (ent.getKey().matchesEmpty()) accepting.add(ent.getValue().intValue());
-            }
-        }
-
-        public boolean matches(String s) {
-            if (s == null) return false;
-            if (Q.isEmpty()) return s.isEmpty();
-            // System.out.println("Starting matching");
-            int q = 0;
-            loop:
-            for (int i = 0, cp;
-                    i < s.length() && !accepting.contains(q);
-                    i += Character.charCount(cp)) {
-                cp = s.codePointAt(i);
-                // System.out.println("q=S" + q + ", ch=" + Character.toString(cp));
-                for (var S : delta.get(q).entrySet()) {
-                    if (S.getKey().containsChar(cp)) {
-                        q = S.getValue();
-                        // System.out.println("New state: q=S" + q);
-                        continue loop;
-                    }
-                }
-                // System.out.println("No match for input character found");
-                return false;
-            }
-            return accepting.contains(q);
-        }
-
-        @Override
-        public String toString() {
-            var states = new ArrayList<>(Q.inverse().entrySet());
-            Collections.sort(states, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
-
-            var sb = new StringBuilder("NFA.Builder {\n");
-
-            for (var ent : states)
-                sb.append("  S")
-                        .append(ent.getKey())
-                        .append(accepting.contains(ent.getKey().intValue()) ? " F " : "   ")
-                        .append(": ")
-                        .append(ent.getValue())
-                        .append('\n');
-            sb.append('\n');
-
-            for (var ent : states) {
-                var q = ent.getKey().intValue();
-                var tt = delta.get(q);
-                sb.append("  S").append(q).append("{");
-                if (tt == null) {
-                    sb.append("}\n");
-                    continue;
-                }
-                sb.append('\n');
-                for (var t : tt.entrySet())
-                    sb.append("    ")
-                            .append(t.getKey().toPattern())
-                            .append(" -> S")
-                            .append(t.getValue().intValue())
-                            .append('\n');
-                sb.append("  }\n");
-            }
-
-            sb.append("}");
-            return sb.toString();
-        }
     }
 }

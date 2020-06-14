@@ -324,6 +324,12 @@ public class IntervalSet<T> {
         return buildDestructive(ivs, m);
     }
 
+    public static <T> IntervalSet<T> unions(Iterable<IntervalSet<T>> xs, OrderedSemigroup<T> m) {
+        var y = IntervalSet.<T>empty();
+        for (var x : xs) y = y.union(x, m);
+        return y;
+    }
+
     public <U> IntervalSet<U> map(Function<T, U> f, OrderedSemigroup<U> m) {
         if (isEmpty()) return IntervalSet.empty();
         var z = new IntervalSet<U>(n, m != null);
@@ -332,5 +338,18 @@ public class IntervalSet<T> {
             z.pushInterval(iv.withValue(f.apply(iv.v)), m);
         }
         return z;
+    }
+
+    public T find(int x) {
+
+        for (int lo = 0, hi = n; lo < hi; ) {
+            var m = lo + (hi - lo) / 2;
+            var iv = get(m);
+            if (x < iv.a) hi = m;
+            else if (x >= iv.b) lo = m + 1;
+            else return iv.v;
+        }
+
+        return null;
     }
 }
