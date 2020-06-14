@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
+
+import de.sfxr.rederiv.support.Enumerate;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
 

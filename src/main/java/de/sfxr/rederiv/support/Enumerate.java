@@ -1,6 +1,10 @@
-package de.sfxr.rederiv;
+package de.sfxr.rederiv.support;
 
 import com.google.common.collect.Iterables;
+import de.sfxr.rederiv.CharSet;
+import de.sfxr.rederiv.Re;
+import de.sfxr.rederiv.ReAlg;
+
 import java.util.*;
 
 public class Enumerate {

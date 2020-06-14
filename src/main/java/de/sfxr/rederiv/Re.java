@@ -36,7 +36,7 @@ public abstract class Re implements ReAlg<Re> {
 
     public static final class Branch extends Re {
 
-        enum Kind {
+        public enum Kind {
             ALT,
             IS,
             SEQ
