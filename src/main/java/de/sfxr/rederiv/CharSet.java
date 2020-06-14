@@ -1,35 +1,35 @@
 package de.sfxr.rederiv;
 
-import com.koloboke.collect.set.IntSet;
-import com.koloboke.collect.set.hash.HashIntSets;
+import de.sfxr.rederiv.support.Interval;
+import de.sfxr.rederiv.support.IntervalSet;
 import java.util.*;
 
 public abstract class CharSet extends Re implements Set<Integer> {
 
-    public static final Sparse NONE = new Sparse(HashIntSets.newImmutableSet(new int[0]));
+    public static final Sparse NONE = new Sparse(IntervalSet.empty());
     public static final Sparse ANY = new Sparse(NONE.chars, true);
     public static final CharSet DIGIT = fromString("0123456789");
 
     public static final class Sparse extends CharSet {
 
-        public final IntSet chars;
+        public final IntervalSet<Void> chars;
         public final boolean complement;
         private int repr = -1;
 
-        private Sparse(IntSet chars, boolean complement) {
+        private Sparse(IntervalSet<Void> chars, boolean complement) {
             this.complement = complement;
             this.chars = Objects.requireNonNull(chars);
         }
 
-        public static Sparse from(IntSet chars) {
+        public static Sparse from(IntervalSet<Void> chars) {
             return from(chars, false);
         }
 
-        public static Sparse from(IntSet chars, boolean complement) {
+        public static Sparse from(IntervalSet<Void> chars, boolean complement) {
             return chars.isEmpty() ? (complement ? ANY : NONE) : new Sparse(chars, complement);
         }
 
-        private Sparse(IntSet chars) {
+        private Sparse(IntervalSet<Void> chars) {
             this(chars, false);
         }
 
@@ -41,12 +41,8 @@ public abstract class CharSet extends Re implements Set<Integer> {
         @Override
         protected int compareToSparse(Sparse s) {
             var r = Boolean.compare(complement, s.complement);
-            if (r == 0) r = Integer.compare(chars.size(), s.chars.size());
-            if (r == 0) r = Integer.compare(chars.hashCode(), s.chars.hashCode());
             if (r != 0) return r;
-            if (chars.equals(s.chars)) return 0;
-            // FIXME: hmm, what to do here?
-            throw new UnsupportedOperationException("NYI");
+            return IntervalSet.comparator().compare(chars, s.chars);
         }
 
         @Override
@@ -58,22 +54,30 @@ public abstract class CharSet extends Re implements Set<Integer> {
                 return ".";
             }
             var b = new StringBuilder();
-            if (!complement && chars.size() == 1) return b.appendCodePoint(pickOne()).toString();
+            if (!complement && chars.isPoint()) return b.appendCodePoint(pickOne()).toString();
             b.append('[');
             if (complement) b.append('^');
-            for (var ch : chars) b.appendCodePoint(ch);
+            for (var iv : chars.asList()) {
+                if (iv.isPoint()) {
+                    b.appendCodePoint(iv.a);
+                } else {
+                    b.appendCodePoint(iv.a);
+                    if (iv.size() != 2) b.append('-');
+                    b.appendCodePoint(iv.b - 1);
+                }
+            }
             b.append(']');
             return b.toString();
         }
 
         @Override
         public String litPrefix() {
-            return chars.size() == 1 ? Character.toString(pickOne()) : "";
+            return chars.isPoint() ? Character.toString(pickOne()) : "";
         }
 
         @Override
         public boolean containsChar(int ch) {
-            return chars.contains(ch) ^ complement;
+            return chars.containsPoint(ch) ^ complement;
         }
 
         @Override
@@ -97,21 +101,29 @@ public abstract class CharSet extends Re implements Set<Integer> {
         }
 
         @Override
+        public IntervalSet<Void> toIntervalSet() {
+            if (!complement) return chars;
+            if (chars.isEmpty()) return IntervalSet.of(Interval.of(0, 0x110000));
+            var ivs = new ArrayList<Interval<Void>>();
+            Interval<Void> prev = null;
+            for (var iv : chars.asList()) {
+                if (prev == null) ivs.add(Interval.of(0, iv.a));
+                else ivs.add(Interval.of(prev.b, iv.a));
+                prev = iv;
+            }
+            ivs.add(Interval.of(prev.b, 0x110000));
+            return IntervalSet.buildDestructive(ivs, null);
+        }
+
+        @Override
         public CharSet intersect(Sparse s) {
             if (s == this) return this;
             if (s == NONE || this == NONE) return NONE;
             if (complement && s.complement)
                 return this.complement().union(s.complement()).complement();
-            var u = this;
-            if (u.complement
-                    || (!u.complement && !s.complement && u.chars.size() < s.chars.size())) {
-                var t = u;
-                u = s;
-                s = t;
-            }
-            return from(
-                    HashIntSets.newImmutableSet(
-                            u.chars.stream().filter(s::containsChar).iterator()));
+            if (!complement && !s.complement) return from(chars.intersection(s.chars, null));
+            if (complement) return from(toIntervalSet().intersection(s.chars, null), false);
+            return from(s.toIntervalSet().intersection(chars, null), false);
         }
 
         @Override
@@ -125,27 +137,18 @@ public abstract class CharSet extends Re implements Set<Integer> {
             if (this == NONE) return s;
             if (complement || s.complement)
                 return this.complement().intersect(s.complement()).complement();
-            var u = this;
-            if (s.chars.size() > u.chars.size()) {
-                var t = u;
-                u = s;
-                s = t;
-            }
-            var w = HashIntSets.newMutableSet(u.chars);
-            w.addAll(s.chars);
-            w.shrink();
-            return from(w);
+            return from(chars.union(s.chars, null));
         }
 
         @Override
         public Iterator<Integer> iterator() {
-            if (!complement) return chars.iterator();
+            if (!complement) return chars.points().iterator();
             return new Iterator<>() {
                 int cp = 0;
                 boolean hasNext = findNext();
 
                 private boolean findNext() {
-                    for (; cp < 0x110000; ++cp) if (!chars.contains(cp)) return true;
+                    for (; cp < 0x110000; ++cp) if (!chars.containsPoint(cp)) return true;
                     return false;
                 }
 
@@ -165,12 +168,13 @@ public abstract class CharSet extends Re implements Set<Integer> {
 
         @Override
         public <T> T[] toArray(T[] a) {
-            if (!complement) return chars.toArray(a);
-            int n = size();
-            if (a.length != n) a = Arrays.copyOf(a, n);
-            int i = 0;
-            for (var x : this) a[i++] = (T) x;
-            return a;
+            // if (!complement) return chars.toArray(a);
+            // int n = size();
+            // if (a.length != n) a = Arrays.copyOf(a, n);
+            // int i = 0;
+            // for (var x : this) a[i++] = (T) x;
+            // return a;
+            throw new IllegalStateException("NYI");
         }
 
         @Override
@@ -179,11 +183,14 @@ public abstract class CharSet extends Re implements Set<Integer> {
             if (r > 0) return r;
 
             if (!complement) {
-                var i = chars.cursor();
-                if (!i.moveNext()) throw new IllegalStateException("Empty CharSet");
-                r = i.elem();
+                r = chars.min();
             } else {
-                for (r = 0; !Character.isValidCodePoint(r) || !containsChar(r); ++r) {}
+                if (chars.isEmpty()) {
+                    r = '0';
+                } else {
+                    // FIXME: what about <= 0?
+                    r = chars.min() - 1;
+                }
             }
             repr = r;
             return r;
@@ -191,12 +198,13 @@ public abstract class CharSet extends Re implements Set<Integer> {
 
         @Override
         public int size() {
-            return complement ? 0x110000 - chars.size() : chars.size();
+            var c = chars.cardinality();
+            return complement ? 0x110000 - c : c;
         }
 
         @Override
         public int fromSingletonCharSetNoCapture() {
-            return !complement && chars.size() == 1 ? pickOne() : -1;
+            return !complement && chars.isPoint() ? pickOne() : -1;
         }
     }
 
@@ -209,7 +217,7 @@ public abstract class CharSet extends Re implements Set<Integer> {
     private static Sparse fromSingleChar(int ch) {
         if (!Character.isValidCodePoint(ch))
             throw new IllegalArgumentException("Invalid code point");
-        return new Sparse(HashIntSets.newImmutableSetOf(ch));
+        return new Sparse(IntervalSet.of(Interval.of(ch)));
     }
 
     @Override
@@ -251,15 +259,16 @@ public abstract class CharSet extends Re implements Set<Integer> {
         int cp = s.codePointAt(0);
         int i = Character.charCount(cp);
         if (i == s.length()) return fromSingleChar(cp);
-        var ss = HashIntSets.newMutableSet();
-        ss.add(cp);
+        var ivs = new ArrayList<Interval<Void>>();
+        ivs.add(Interval.of(cp));
         for (; i < s.length(); i += Character.charCount(cp)) {
             cp = s.codePointAt(i);
-            ss.add(cp);
+            ivs.add(Interval.of(cp));
         }
-        ss.shrink();
-        return Sparse.from(ss);
+        return Sparse.from(IntervalSet.buildDestructive(ivs, null));
     }
+
+    public abstract IntervalSet<Void> toIntervalSet();
 
     @Override
     public String litPrefix() {

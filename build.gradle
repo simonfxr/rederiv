@@ -1,13 +1,12 @@
 plugins {
     id 'java'
-    id 'idea'
     id 'eclipse'
 }
 
 allprojects{
     repositories {
         jcenter()
-        maven { url "https://jitpack.io" }
+       // maven { url "https://jitpack.io" }
     }
 }
 

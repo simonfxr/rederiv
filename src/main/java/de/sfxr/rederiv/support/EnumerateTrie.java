@@ -2,57 +2,74 @@ package de.sfxr.rederiv.support;
 
 import de.sfxr.rederiv.CharSet;
 import de.sfxr.rederiv.Re;
-import de.sfxr.rederiv.ReAlg;
 
 public final class EnumerateTrie {
     private EnumerateTrie() {}
 
-    private final static Re.Visitor<Trie> ENUMERATOR = new Re.Visitor<>() {
+    private static final Re.Visitor<Trie> ENUMERATOR =
+            new Re.Visitor<>() {
 
-        @Override
-        public Trie visit(Re.Branch br) {
-            var l = enumerate(br.a);
-            var r = enumerate(br.b);
-            switch (br.kind) {
-                case ALT:
-                    return l.union(r);
-                case SEQ:
-                    return l.concat(r);
-                case IS:
-                    return l.intersection(r);
-            }
-            return Re.unreachable();
-        }
+                @Override
+                public Trie visit(Re.Branch br) {
+                    var l = enumerate(br.a);
+                    var r = enumerate(br.b);
+                    switch (br.kind) {
+                        case ALT:
+                            return l.union(r);
+                        case SEQ:
+                            return l.concat(r);
+                        case IS:
+                            return l.intersection(r);
+                    }
+                    return Re.unreachable();
+                }
 
-        @Override
-        public Trie visit(Re.Neg neg) {
-            throw new UnsupportedOperationException();
-        }
+                @Override
+                public Trie visit(Re.Neg neg) {
+                    throw new UnsupportedOperationException();
+                }
 
-        @Override
-        public Trie visit(Re.Rep rep) {
-            var t = enumerate(rep.re).concat(enumerate(rep.re.range(Integer.max(rep.min - 1, 0),
-                    ReAlg.cardSub(rep.max, 1))));
-            return rep.min == 0 ? t.union(Trie.epsilon()) : t;
-        }
+                private Trie kleene(Trie t) {
+                    var self = new Trie[] {null};
+                    return self[0] = Trie.epsilon().union(t.concat(Trie.deferred(() -> self[0])));
+                }
 
-        @Override
-        public Trie visit(Re.Lit l) {
-            return Trie.fromLit(l.val);
-        }
+                @Override
+                public Trie visit(Re.Rep rep) {
 
-        @Override
-        public Trie visit(CharSet cs) {
-            throw new UnsupportedOperationException("NYI");
-        }
+                    var t = enumerate(rep.re);
+                    var u = Trie.epsilon();
+                    for (int i = 0; i < rep.min; ++i) u = t.concat(u);
 
-        @Override
-        public Trie visit(Re.Capture cap) {
-            throw new IllegalStateException("IMPOSSIBLE");
-        }
-    };
+                    Trie tail;
+                    if (rep.max == Integer.MAX_VALUE) {
+                        tail = u.concat(kleene(t));
+                    } else {
+                        tail = Trie.epsilon();
+                        for (int i = 0; i < rep.max - rep.min; ++i)
+                            tail = Trie.epsilon().union(t.concat(tail));
+                    }
+
+                    return u.concat(tail);
+                }
+
+                @Override
+                public Trie visit(Re.Lit l) {
+                    return Trie.fromLit(l.val);
+                }
+
+                @Override
+                public Trie visit(CharSet cs) {
+                    return Trie.of(cs.toIntervalSet());
+                }
+
+                @Override
+                public Trie visit(Re.Capture cap) {
+                    throw new IllegalStateException("IMPOSSIBLE");
+                }
+            };
 
     public static Trie enumerate(Re re) {
-        return re.visitIgnoreCapture(ENUMERATOR);
+        return Trie.deferred(() -> re.visitIgnoreCapture(ENUMERATOR));
     }
 }

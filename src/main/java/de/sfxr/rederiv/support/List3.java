@@ -31,12 +31,9 @@ public final class List3<A> {
     }
 
     public List<A> toList() {
-        if (_0 == null)
-            return Collections.emptyList();
-        if (_1 == null)
-            return List.of(_0);
-        if (_2 == null)
-            return List.of(_0, _1);
+        if (_0 == null) return Collections.emptyList();
+        if (_1 == null) return List.of(_0);
+        if (_2 == null) return List.of(_0, _1);
         return List.of(_0, _1, _2);
     }
 }

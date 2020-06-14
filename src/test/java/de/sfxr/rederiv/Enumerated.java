@@ -2,11 +2,10 @@ package de.sfxr.rederiv;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import de.sfxr.rederiv.support.EnumerateTrie;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
-
-import de.sfxr.rederiv.support.Enumerate;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
 
@@ -39,7 +38,7 @@ public class Enumerated {
         var jpat = Pattern.compile(pat.toPattern());
         var dfa = DFA.compile(pat);
         int i = 0;
-        for (var s : Enumerate.enumerate(pat)) {
+        for (var s : EnumerateTrie.enumerate(pat).stringIterable()) {
             if (++i >= MAX_ENUMERATIONS) break;
             assertTrue(jpat.matcher(s).matches());
             assertMatches(pat, dfa, s);

@@ -1,8 +1,8 @@
 package de.sfxr.rederiv.support;
 
-import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +32,8 @@ public class IntervalTest {
             var i1 = Interval.of(0, 3, 1);
             var i2 = Interval.of(2, 5, 2);
             var result = i1.union(i2, TestUtil.INTS).toList();
-            var expected = List.of(Interval.of(0, 2, 1), Interval.of(2, 3, 3), Interval.of(3, 5, 2));
+            var expected =
+                    List.of(Interval.of(0, 2, 1), Interval.of(2, 3, 3), Interval.of(3, 5, 2));
             assertEquals(expected, result);
 
             // swapped
@@ -84,7 +85,8 @@ public class IntervalTest {
             var i1 = Interval.of(0, 7, 1);
             var i2 = Interval.of(2, 5, 2);
             var result = i1.union(i2, TestUtil.INTS).toList();
-            var expected = List.of(Interval.of(0, 2, 1), Interval.of(2, 5, 3), Interval.of(5, 7, 1));
+            var expected =
+                    List.of(Interval.of(0, 2, 1), Interval.of(2, 5, 3), Interval.of(5, 7, 1));
             assertEquals(expected, result);
 
             // swapped
@@ -117,9 +119,5 @@ public class IntervalTest {
             result = i2.union(i1, TestUtil.INTS).toList();
             assertEquals(expected, result);
         }
-
-
-
     }
-
 }

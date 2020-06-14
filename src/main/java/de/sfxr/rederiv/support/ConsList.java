@@ -1,6 +1,5 @@
 package de.sfxr.rederiv.support;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -19,7 +18,7 @@ public class ConsList<T> implements Iterable<T> {
         this.tl = this;
     }
 
-    private final static ConsList<?> NIL = new ConsList<Object>();
+    private static final ConsList<?> NIL = new ConsList<Object>();
 
     public static <T> ConsList<T> empty() {
         return (ConsList<T>) (Object) NIL;
@@ -34,8 +33,7 @@ public class ConsList<T> implements Iterable<T> {
     }
 
     public T head() {
-        if (this == NIL)
-            throw new IllegalArgumentException("Tail of empty list is undefined");
+        if (this == NIL) throw new IllegalArgumentException("Tail of empty list is undefined");
         return hd;
     }
 
@@ -44,19 +42,21 @@ public class ConsList<T> implements Iterable<T> {
     }
 
     public ConsList<T> tail() {
-        if (this == NIL)
-            throw new IllegalArgumentException("Tail of empty list is undefined");
+        if (this == NIL) throw new IllegalArgumentException("Tail of empty list is undefined");
         return tl;
     }
 
-    public ConsList<T> safeTail() { return tl; }
+    public ConsList<T> safeTail() {
+        return tl;
+    }
 
-    public boolean isEmpty() { return this == NIL; }
+    public boolean isEmpty() {
+        return this == NIL;
+    }
 
     public List<T> toList() {
         var xs = new LinkedList<T>();
-        for (var l = this; !l.isEmpty(); l = l.tail())
-            xs.addFirst(l.head());
+        for (var l = this; !l.isEmpty(); l = l.tail()) xs.addFirst(l.head());
         return xs;
     }
 
@@ -80,7 +80,9 @@ public class ConsList<T> implements Iterable<T> {
             }
 
             @Override
-            public T next() { return x; }
+            public T next() {
+                return x;
+            }
         };
     }
 }

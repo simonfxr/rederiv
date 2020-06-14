@@ -6,8 +6,7 @@ import java.util.function.BiFunction;
 public interface Semigroup<T> extends BiFunction<T, T, T> {
 
     static <T> T apply(Semigroup<T> m, T x, T y) {
-        if (m == null)
-            return null;
+        if (m == null) return null;
         return m.apply(x, y);
     }
 }

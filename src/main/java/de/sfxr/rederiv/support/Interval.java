@@ -1,23 +1,22 @@
 package de.sfxr.rederiv.support;
 
 import com.google.common.base.Preconditions;
-
 import java.util.Comparator;
 import java.util.Objects;
 
 public class Interval<T> {
 
-    private final static int HDOM = Interval.class.getName().hashCode();
+    private static final int HDOM = Interval.class.getName().hashCode();
 
-    private final static boolean CHECKING = Checking.isCheckingEnabled(Interval.class);
+    private static final boolean CHECKING = Checking.isCheckingEnabled(Interval.class);
 
     public final int a;
     public final int b;
     public final T v;
 
-    private final static Interval<?> EMPTY = new Interval<>(0, 0, null);
+    private static final Interval<?> EMPTY = new Interval<>(0, 0, null);
 
-    private final static Interval<Void> UNICODE = new Interval<>(0, 0x110000, null);
+    private static final Interval<Void> UNICODE = new Interval<>(0, 0x110000, null);
 
     private Interval(int a, int b, T v) {
         this.a = a;
@@ -67,22 +66,19 @@ public class Interval<T> {
     }
 
     public static <T> Comparator<Interval<T>> comparator(Comparator<? super T> cmp) {
-        if (cmp == null)
-            return (Comparator<Interval<T>>) (Object) VOID_COMPARATOR;
+        if (cmp == null) return (Comparator<Interval<T>>) (Object) VOID_COMPARATOR;
         return (x, y) -> {
             int r = Integer.compare(x.a, y.a);
-            if (r != 0)
-                return r;
+            if (r != 0) return r;
             r = Integer.compare(x.b, y.b);
-            if (r != 0)
-                return r;
+            if (r != 0) return r;
             return cmp.compare(x.v, y.v);
         };
     }
 
-    private final static Comparator<Interval<Void>> VOID_COMPARATOR = comparator((x, y) -> 0);
+    private static final Comparator<Interval<Void>> VOID_COMPARATOR = comparator((x, y) -> 0);
 
-    public final static Comparator<Interval<Void>> comparator() {
+    public static final Comparator<Interval<Void>> comparator() {
         return VOID_COMPARATOR;
     }
 
@@ -91,9 +87,7 @@ public class Interval<T> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Interval<?> interval = (Interval<?>) o;
-        return a == interval.a &&
-                b == interval.b &&
-                Objects.equals(v, interval.v);
+        return a == interval.a && b == interval.b && Objects.equals(v, interval.v);
     }
 
     @Override
@@ -103,18 +97,15 @@ public class Interval<T> {
 
     @Override
     public String toString() {
-        return "Interval{" +
-                "a=" + a +
-                ", b=" + b +
-                ", v=" + v +
-                '}';
+        return "Interval{" + "a=" + a + ", b=" + b + ", v=" + v + '}';
     }
 
-    private final static <T> int compare(Comparator<T> cmp, T x, T y) {
+    private static final <T> int compare(Comparator<T> cmp, T x, T y) {
         return cmp == null ? 0 : cmp.compare(x, y);
     }
 
-    private static <T> List3<Interval<T>> checkUnion(List3<Interval<T>> ret, Interval<T> x, Interval<T> y) {
+    private static <T> List3<Interval<T>> checkUnion(
+            List3<Interval<T>> ret, Interval<T> x, Interval<T> y) {
         if (CHECKING) {
             var l = ret.toList();
             var la = Integer.min(x.a, y.a);
@@ -128,10 +119,10 @@ public class Interval<T> {
         return ret;
     }
 
-    private final static <T> List3<Interval<T>> two(int la, int lb, T lv, int rb, T rv, OrderedSemigroup<T> m) {
+    private static final <T> List3<Interval<T>> two(
+            int la, int lb, T lv, int rb, T rv, OrderedSemigroup<T> m) {
         var o = compare(m, lv, rv);
-        if (o == 0)
-            return List3.of(Interval.of(la, rb, lv));
+        if (o == 0) return List3.of(Interval.of(la, rb, lv));
         return List3.of(Interval.of(la, lb, lv), Interval.of(lb, rb, rv));
     }
 
@@ -144,14 +135,11 @@ public class Interval<T> {
         var ex = x.isEmpty();
         var ey = y.isEmpty();
 
-        if (ex && ey)
-            return checkUnion(List3.of(), x, y);
+        if (ex && ey) return checkUnion(List3.of(), x, y);
 
-        if (ex)
-            return checkUnion(List3.of(y), x, y);
+        if (ex) return checkUnion(List3.of(y), x, y);
 
-        if (ey)
-            return checkUnion(List3.of(x), x, y);
+        if (ey) return checkUnion(List3.of(x), x, y);
 
         var swapped = false;
         if (x.a > y.a) {
@@ -163,8 +151,12 @@ public class Interval<T> {
 
         // here: x.a <= y.a
 
-        if (x.b <= y.a)
+        if (x.b <= y.a) {
+            if (x.b == y.a && compare(m, x.v, y.v) == 0) {
+                return checkUnion(List3.of(Interval.of(x.a, y.b, x.v)), x, y);
+            }
             return checkUnion(List3.of(x, y), x, y);
+        }
 
         // here: y.a < x.b => overlapping
 
@@ -178,8 +170,7 @@ public class Interval<T> {
         lv = x.v;
         mv = null;
 
-        if (m != null)
-            mv = swapped ? m.apply(y.v, x.v) : m.apply(x.v, y.v);
+        if (m != null) mv = swapped ? m.apply(y.v, x.v) : m.apply(x.v, y.v);
 
         if (y.b <= x.b) {
             // here: x.a <= y.a <= y.b <= x.b
@@ -199,10 +190,12 @@ public class Interval<T> {
         if (ma == mb || compare(m, mv, rv) == 0)
             return checkUnion(two(la, ma, lv, rb, rv, m), x, y);
 
-        if (mb == rb)
-            return checkUnion(two(la, ma, lv, mb, mv, m), x, y);
+        if (mb == rb) return checkUnion(two(la, ma, lv, mb, mv, m), x, y);
 
-        return checkUnion(List3.of(Interval.of(la, ma, lv), Interval.of(ma, mb, mv), Interval.of(mb, rb, rv)), x, y);
+        return checkUnion(
+                List3.of(Interval.of(la, ma, lv), Interval.of(ma, mb, mv), Interval.of(mb, rb, rv)),
+                x,
+                y);
     }
 
     public Interval<T> intersection(Interval<T> y, OrderedSemigroup<T> m) {
@@ -211,8 +204,11 @@ public class Interval<T> {
         int a = Math.max(x.a, y.a);
         int b = Math.min(x.b, y.b);
 
-        if (a >= b)
-            return Interval.empty();
+        if (a >= b) return Interval.empty();
         return Interval.of(a, b, m != null ? m.apply(x.v, y.v) : null);
+    }
+
+    public boolean isPoint() {
+        return size() == 1;
     }
 }
