@@ -40,7 +40,7 @@ public class DFA {
         public Integer apply(Integer x, Integer y) {
             if (x == y)
                 return x;
-            throw new IllegalStateException("IMPOSSIBLE");
+            throw new IllegalStateException("IMPOSSIBLE: " + x + " != " + y);
         }
     };
 

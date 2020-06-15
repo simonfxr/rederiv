@@ -160,8 +160,6 @@ public class Interval<T> {
 
         // here: y.a < x.b => overlapping
 
-        var oxy = compare(m, x.v, y.v);
-
         int la, ma, mb, rb;
         T lv, mv, rv;
 

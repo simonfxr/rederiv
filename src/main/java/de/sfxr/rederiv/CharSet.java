@@ -47,6 +47,9 @@ public final class CharSet extends Re implements Set<Integer> {
             if (iv.isPoint()) {
                 b.appendCodePoint(iv.a);
             } else {
+                if (iv.isEmpty()) {
+                    throw new IllegalStateException();
+                }
                 b.appendCodePoint(iv.a);
                 if (iv.size() != 2) b.append('-');
                 b.appendCodePoint(iv.b - 1);

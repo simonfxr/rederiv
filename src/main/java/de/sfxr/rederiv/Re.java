@@ -252,7 +252,8 @@ public abstract class Re implements ReAlg<Re> {
 
             {
                 var cs = re.fromCharSetNoCapture();
-                if (cs == CharSet.ANYTHING && min == 0 && max == Integer.MAX_VALUE) return ANYTHING;
+                if (cs == Re.Deferred.ANYTHING && min == 0 && max == Integer.MAX_VALUE)
+                    return Re.Deferred.ANYTHING;
             }
 
             if (!(re instanceof Rep)) return new Rep(min, max, re);
@@ -826,10 +827,12 @@ public abstract class Re implements ReAlg<Re> {
         return CharSet.ANY;
     }
 
-    public static final Re ANYTHING = new Rep(0, Integer.MAX_VALUE, CharSet.ANY);
+    private final static class Deferred {
+        static final Re ANYTHING = new Rep(0, Integer.MAX_VALUE, CharSet.ANY);
+    }
 
     @Override
     public Re asAnything() {
-        return ANYTHING;
+        return Deferred.ANYTHING;
     }
 }

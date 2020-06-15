@@ -21,7 +21,8 @@ public final class Trie implements Comparable<Trie> {
     public static Trie fromLit(String val) {
         var chs = val.chars().mapToObj(x -> x).collect(Collectors.toList());
         var t = epsilon();
-        for (int i = chs.size() - 1; i >= 0; --i) t = t.cons(Interval.of(chs.get(i)));
+        for (int i = chs.size() - 1; i >= 0; --i)
+            t = t.cons(Interval.of(chs.get(i)));
         return t;
     }
 
@@ -31,7 +32,8 @@ public final class Trie implements Comparable<Trie> {
             var f = supplier;
             supplier = null;
             var p = f.get();
-            if (p.supplier != null) p.eval();
+            if (p.supplier != null)
+                p.eval();
             root = p.root;
             containsEpsilon = p.containsEpsilon;
         }
@@ -66,58 +68,53 @@ public final class Trie implements Comparable<Trie> {
         }
     }
 
-    private static final OrderedSemigroup<Trie> UNION =
-            new Ordered() {
-                @Override
-                public Trie apply(Trie x, Trie y) {
-                    return x.union(y);
-                }
-            };
+    private static final OrderedSemigroup<Trie> UNION = new Ordered() {
+        @Override
+        public Trie apply(Trie x, Trie y) {
+            return x.union(y);
+        }
+    };
 
-    private static final OrderedSemigroup<Trie> INTERSECTION =
-            new Ordered() {
-                @Override
-                public Trie apply(Trie x, Trie y) {
-                    return x.intersection(y);
-                }
-            };
+    private static final OrderedSemigroup<Trie> INTERSECTION = new Ordered() {
+        @Override
+        public Trie apply(Trie x, Trie y) {
+            return x.intersection(y);
+        }
+    };
 
-    private static final Comparator<IntervalSet<Trie>> TREE_LEAF_ORDERING =
-            IntervalSet.comparator(
-                    (x, y) -> {
-                        if (x == y) return 0;
-                        if (x == null) return -1;
-                        if (y == null) return 1;
-                        int r =
-                                Integer.compare(
-                                        System.identityHashCode(x), System.identityHashCode(y));
-                        if (r != 0) return r;
-                        // very unlikely, but nothing else we can do:
-                        return x.compareTo(y);
-                    });
+    private static final Comparator<IntervalSet<Trie>> TREE_LEAF_ORDERING = IntervalSet
+            .comparator(Comparator.<Trie>naturalOrder());
 
     /**
-     * {@link Trie}'s are potentially infinite and thus any total order is not computable, this
-     * ordering only evaluates up to one level.
+     * {@link Trie}'s are potentially infinite and thus any total order is not
+     * computable, this ordering only evaluates up to one level.
      *
      * @param o
      * @return == 0 => really equal, != 0 => might be equal or not
      */
     @Override
     public int compareTo(Trie o) {
-        if (this == o) return 0;
-        if (o == null) return 1;
+        if (this == o)
+            return 0;
+        if (o == null)
+            return 1;
+        var r = Integer.compare(System.identityHashCode(this), System.identityHashCode(o));
+        if (r != 0)
+            return r;
         eval();
         o.eval();
-        var r = Boolean.compare(containsEpsilon, o.containsEpsilon);
-        if (r != 0) return r;
+        r = Boolean.compare(containsEpsilon, o.containsEpsilon);
+        if (r != 0)
+            return r;
         return TREE_LEAF_ORDERING.compare(root, o.root);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || !(o instanceof Trie)) return false;
+        if (this == o)
+            return true;
+        if (o == null || !(o instanceof Trie))
+            return false;
         return compareTo((Trie) o) == 0;
     }
 
@@ -128,28 +125,25 @@ public final class Trie implements Comparable<Trie> {
     }
 
     public Trie union(Trie y) {
-        if (y == this) return this;
-        return new Trie(
-                () -> {
-                    var x = Trie.this;
-                    x.eval();
-                    y.eval();
-                    return evaluated(
-                            x.containsEpsilon || y.containsEpsilon, x.root.union(y.root, UNION));
-                });
+        if (y == this)
+            return this;
+        return new Trie(() -> {
+            var x = Trie.this;
+            x.eval();
+            y.eval();
+            return evaluated(x.containsEpsilon || y.containsEpsilon, x.root.union(y.root, UNION));
+        });
     }
 
     public Trie intersection(Trie y) {
-        if (y == this) return this;
-        return new Trie(
-                () -> {
-                    var x = Trie.this;
-                    x.eval();
-                    y.eval();
-                    return evaluated(
-                            x.containsEpsilon && y.containsEpsilon,
-                            x.root.intersection(y.root, INTERSECTION));
-                });
+        if (y == this)
+            return this;
+        return new Trie(() -> {
+            var x = Trie.this;
+            x.eval();
+            y.eval();
+            return evaluated(x.containsEpsilon && y.containsEpsilon, x.root.intersection(y.root, INTERSECTION));
+        });
     }
 
     public Trie cons(Supplier<Interval<Void>> ivsup) {
@@ -165,7 +159,8 @@ public final class Trie implements Comparable<Trie> {
         private final Trie trie;
 
         private BFSState(ConsList<Interval<Void>> prefix, Trie trie) {
-            if (trie == null) throw new NullPointerException();
+            if (trie == null)
+                throw new NullPointerException();
             this.prefix = Objects.requireNonNull(prefix);
             this.trie = Objects.requireNonNull(trie);
         }
@@ -183,12 +178,12 @@ public final class Trie implements Comparable<Trie> {
             @Override
             public boolean hasNext() {
                 produced = null;
-                for (BFSState s; produced == null && (s = pending.poll()) != null; ) {
+                for (BFSState s; produced == null && (s = pending.poll()) != null;) {
                     s.trie.eval();
-                    if (s.trie.containsEpsilon) produced = s.prefix;
+                    if (s.trie.containsEpsilon)
+                        produced = s.prefix;
                     for (var iv : s.trie.root.asList())
-                        pending.add(
-                                new BFSState(s.prefix.cons(Interval.of(iv.a, iv.b, null)), iv.v));
+                        pending.add(new BFSState(s.prefix.cons(Interval.of(iv.a, iv.b, null)), iv.v));
                 }
                 return produced != null;
             }
@@ -196,7 +191,8 @@ public final class Trie implements Comparable<Trie> {
             @Override
             public ConsList<Interval<Void>> next() {
                 var x = produced;
-                if (x == null) throw new IllegalStateException("exhausted");
+                if (x == null)
+                    throw new IllegalStateException("exhausted");
                 produced = null;
                 return x;
             }
@@ -204,10 +200,7 @@ public final class Trie implements Comparable<Trie> {
     }
 
     public Stream<String> enumateStrings() {
-        var stream =
-                StreamSupport.stream(
-                        Spliterators.spliteratorUnknownSize(enumerate(), Spliterator.ORDERED),
-                        false);
+        var stream = StreamSupport.stream(Spliterators.spliteratorUnknownSize(enumerate(), Spliterator.ORDERED), false);
         return stream.flatMap(cl -> fromReversedIntervals(cl));
     }
 
@@ -234,29 +227,20 @@ public final class Trie implements Comparable<Trie> {
     }
 
     public Trie concat(Trie replacement) {
-        return new Trie(
-                () -> {
-                    var t = Trie.this;
-                    t.eval();
-                    var u = t.root.map(c -> c.concat(replacement), UNION);
-                    if (t.containsEpsilon) {
-                        replacement.eval();
-                        return evaluated(
-                                replacement.containsEpsilon, u.union(replacement.root, UNION));
-                    } else {
-                        return evaluated(false, u);
-                    }
-                });
+        return new Trie(() -> {
+            var t = Trie.this;
+            t.eval();
+            var u = evaluated(false, t.root.mapInjectively(c -> c.concat(replacement)));
+            return t.containsEpsilon ? u.union(replacement) : u;
+        });
     }
 
     public static Stream<String> fromReversedIntervals(ConsList<Interval<Void>> ivs) {
-        if (ivs.isEmpty()) return Stream.of("");
-        return fromReversedIntervals(ivs.safeTail())
-                .flatMap(
-                        s -> {
-                            var iv = ivs.head();
-                            return IntStream.range(iv.a, iv.b)
-                                    .mapToObj(c -> String.format("%s%c", s, c));
-                        });
+        if (ivs.isEmpty())
+            return Stream.of("");
+        return fromReversedIntervals(ivs.safeTail()).flatMap(s -> {
+            var iv = ivs.head();
+            return IntStream.range(iv.a, iv.b).mapToObj(c -> String.format("%s%c", s, c));
+        });
     }
 }

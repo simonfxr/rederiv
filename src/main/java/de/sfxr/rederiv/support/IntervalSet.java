@@ -45,8 +45,9 @@ public class IntervalSet<T> {
             }
             Interval<T> prev = null;
             for (var iv : asList()) {
+                if (iv.isEmpty()) throw new IllegalStateException("Contains empty interval");
                 if (prev != null)
-                    Preconditions.checkArgument(
+                    Preconditions.checkState(
                             prev.b < iv.a || (prev.b == iv.a && cmp(m, prev.v, iv.v) != 0));
                 prev = iv;
             }
@@ -71,11 +72,14 @@ public class IntervalSet<T> {
     public static <T> Comparator<IntervalSet<T>> comparator(Comparator<T> cmp) {
         var ivcmp = Interval.comparator(cmp);
         return (x, y) -> {
-            for (int i = 0; i < x.n && i < y.n; ++i) {
-                int r = ivcmp.compare(x.get(i), y.get(i));
+            var r = Integer.compare(x.n, y.n);
+            if (r != 0) return r;
+            if (x == y) return 0;
+            for (int i = 0; i < x.n; ++i) {
+                r = ivcmp.compare(x.get(i), y.get(i));
                 if (r != 0) return r;
             }
-            return Integer.compare(x.n, y.n);
+            return 0;
         };
     }
 
@@ -258,7 +262,7 @@ public class IntervalSet<T> {
     // x.difference(y) = x \ y;
     public IntervalSet<T> difference(IntervalSet<T> y) {
         if (y.isEmpty()) return this;
-        var z = new IntervalSet<T>(0, v != null);
+        var z = new ArrayList<Interval<T>>();
         var x = this;
 
         int i, j;
@@ -266,7 +270,7 @@ public class IntervalSet<T> {
             var xi = x.get(i);
             var yj = y.get(j);
             if (xi.b <= yj.a) {
-                z.unsafePushInterval(xi);
+                z.add(xi);
                 ++i;
             } else if (yj.b <= xi.a) {
                 ++j;
@@ -277,17 +281,30 @@ public class IntervalSet<T> {
                 var a = xi.a;
                 Interval<?> yk;
                 int k;
-                for (k = 0; k < y.n && (yk = y.get(k)).b <= xi.b; ++k, a = yk.a)
-                    z.unsafePushInterval(Interval.of(a, yk.a, xi.v));
+                for (k = 0; k < y.n && (yk = y.get(k)).b <= xi.b; ++k, a = yk.b)
+                    if (a < yk.a) z.add(Interval.of(a, yk.a, xi.v));
 
-                if (k >= y.n) z.unsafePushInterval(Interval.of(a, xi.b, xi.v));
+                if (k >= y.n && a < xi.b) z.add(Interval.of(a, xi.b, xi.v));
+
                 ++i;
             }
         }
 
-        for (; i < x.n; ++i) z.unsafePushInterval(x.get(i));
+        for (; i < x.n; ++i) z.add(x.get(i));
 
-        return z.check(null);
+        return buildDestructive(
+                z,
+                new OrderedSemigroup<T>() {
+                    @Override
+                    public int compare(T o1, T o2) {
+                        return o1 == o2 ? 0 : -1;
+                    }
+
+                    @Override
+                    public T apply(T t, T t2) {
+                        return t;
+                    }
+                });
     }
 
     public static <T> IntervalSet<T> buildDestructive(
@@ -328,6 +345,13 @@ public class IntervalSet<T> {
         var y = IntervalSet.<T>empty();
         for (var x : xs) y = y.union(x, m);
         return y;
+    }
+
+    public <U> IntervalSet<U> mapInjectively(Function<T, U> f) {
+        if (isEmpty()) return empty();
+        var z = new IntervalSet<U>(n, v != null);
+        for (var iv : asList()) z.unsafePushInterval(iv.withValue(f.apply(iv.v)));
+        return z;
     }
 
     public <U> IntervalSet<U> map(Function<T, U> f, OrderedSemigroup<U> m) {
