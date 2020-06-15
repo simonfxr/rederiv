@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 
 public class DFA {
 
-    private final DFABuilder builder = new DFABuilder();
+    private final DFABuilder builder;
 
     private final IntervalSet<Integer>[] trans;
     private final int initial;
@@ -45,6 +45,7 @@ public class DFA {
     };
 
     private DFA(DFABuilder builder, Re re) {
+        this.builder = builder;
         this.trans = new IntervalSet[builder.Q.size()];
         this.initial = newState(0, builder.accepting.contains(0));
         this.re = Objects.requireNonNull(re);

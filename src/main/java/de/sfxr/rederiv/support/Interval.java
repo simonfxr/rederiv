@@ -4,7 +4,7 @@ import com.google.common.base.Preconditions;
 import java.util.Comparator;
 import java.util.Objects;
 
-public class Interval<T> {
+public final class Interval<T> {
 
     private static final int HDOM = Interval.class.getName().hashCode();
 
@@ -38,6 +38,10 @@ public class Interval<T> {
 
     public Interval<Void> forget() {
         return of(a, b, null);
+    }
+
+    public final static <T> Interval<T> covCast(Interval<? extends T> iv) {
+        return of(iv.a, iv.b, iv.v);
     }
 
     public <U> Interval<U> withValue(U value) {
@@ -86,7 +90,7 @@ public class Interval<T> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Interval<?> interval = (Interval<?>) o;
+        var interval = (Interval<?>) o;
         return a == interval.a && b == interval.b && Objects.equals(v, interval.v);
     }
 

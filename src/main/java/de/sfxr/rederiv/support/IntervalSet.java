@@ -71,16 +71,16 @@ public class IntervalSet<T> {
 
     public static <T> Comparator<IntervalSet<T>> comparator(Comparator<T> cmp) {
         var ivcmp = Interval.comparator(cmp);
-        return (x, y) -> {
-            var r = Integer.compare(x.n, y.n);
-            if (r != 0) return r;
-            if (x == y) return 0;
-            for (int i = 0; i < x.n; ++i) {
-                r = ivcmp.compare(x.get(i), y.get(i));
-                if (r != 0) return r;
-            }
-            return 0;
-        };
+        return (x, y) -> IntervalSet.<T>comparing(x, y, ivcmp);
+    }
+
+    private static <U> int comparing(IntervalSet<? extends U> x, IntervalSet<? extends U> y,
+                                     Comparator<Interval<U>> cmp) {
+        if (x == y) return 0;
+        var r = Integer.compare(x.n, y.n);
+        for (int i = 0; r == 0 && i < x.n; ++i)
+            r = cmp.compare(Interval.covCast(x.get(i)), Interval.covCast(y.get(i)));
+        return r;
     }
 
     public int cardinality() {
@@ -228,13 +228,16 @@ public class IntervalSet<T> {
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) return false;
-        IntervalSet<?> that = (IntervalSet<?>) o;
-        return this.asList().equals(that.asList());
+        var rhs = (IntervalSet<?>) o;
+        return IntervalSet.comparing(this, rhs, (x, y) -> Objects.equals(x, y) ? 0 : -1) == 0;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(HDOM, asList());
+        int h = HDOM;
+        for (int i = 0; i < n; ++i)
+            h = h * 31 + get(i).hashCode();
+        return h;
     }
 
     public IntervalSet<T> union(IntervalSet<T> y, OrderedSemigroup<T> m) {
