@@ -30,7 +30,7 @@ public class DFA {
         return newState(q, builder.accepting.contains(q));
     }
 
-    private static final OrderedSemigroup<Integer> INTS = new OrderedSemigroup<Integer>() {
+    private static final OrderedSemigroup<Integer> INTS = new OrderedSemigroup<>() {
         @Override
         public int compare(Integer x, Integer y) {
             return Integer.compare(x, y);
@@ -38,7 +38,7 @@ public class DFA {
 
         @Override
         public Integer apply(Integer x, Integer y) {
-            if (x == y)
+            if (x.intValue() == y)
                 return x;
             throw new IllegalStateException("IMPOSSIBLE: " + x + " != " + y);
         }
@@ -57,7 +57,7 @@ public class DFA {
             } else {
                 trans[i] = d.entrySet().stream()
                         .map(e -> e.getKey().toIntervalSet().map(ignored -> mkDFAState(builder, e.getValue()), INTS))
-                        .collect(Collectors.reducing(IntervalSet.<Integer>empty(), (x, y) -> x.union(y, INTS)));
+                        .collect(Collectors.reducing(IntervalSet.empty(), (x, y) -> x.union(y, INTS)));
             }
         }
     }
@@ -87,6 +87,8 @@ public class DFA {
         builder.build(re);
         return new DFA(builder, re);
     }
+
+    public Re re() { return re; }
 
     @Override
     public String toString() {

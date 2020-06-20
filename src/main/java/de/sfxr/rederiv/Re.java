@@ -1,10 +1,16 @@
 package de.sfxr.rederiv;
 
+import de.sfxr.rederiv.support.Checking;
+
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 public abstract class Re implements ReAlg<Re> {
+
+    private final static boolean CHECKING = Checking.isCheckingEnabled(Re.class);
 
     public enum Kind {
         Lit,
@@ -51,11 +57,40 @@ public abstract class Re implements ReAlg<Re> {
             this.kind = kind;
             this.a = Objects.requireNonNull(a);
             this.b = Objects.requireNonNull(b);
+            // check right associativity
+            if (CHECKING && a instanceof Branch && kind == ((Branch) a).kind)
+                throw new IllegalArgumentException();
             this.capCount = caps;
             this.matchesEmpty =
                     kind != Kind.ALT
                             ? a.matchesEmpty() && b.matchesEmpty()
                             : a.matchesEmpty() || b.matchesEmpty();
+        }
+
+        private static Branch commuteCanonical(Kind k, BiFunction<Re, Re, Re> build, int ca, Re a, Branch bc) {
+            var o = a.compareTo(bc.a);
+            if (o == 0) return bc;
+            if (o < 0) return new Branch(k, ca + bc.capCount, a, bc);
+            var rhs = build.apply(a, bc.b);
+            return new Branch(k, bc.a.countCaptures() + rhs.countCaptures(), bc.a, rhs);
+        }
+
+        private static Re commuteCanonical(Kind k, Function<Re, Branch> unfold, BiFunction<Re, Re, Re> build, int ca, Re a, int cb, Re b) {
+            var aalt = unfold.apply(a);
+            var balt = unfold.apply(b);
+            if (aalt != null && balt != null) {
+                var oo = aalt.a.compareTo(balt.a);
+                if (oo == 0)
+                    return build.apply(aalt.b, b);
+                if (oo < 0)
+                    return new Branch(k, ca + cb, aalt.a, build.apply(aalt.b, b));
+                return new Branch(k, ca + cb, balt.a, build.apply(balt.b, a));
+            }
+            if (aalt != null)
+                return commuteCanonical(k, build, cb, b, aalt);
+            if (balt != null)
+                return commuteCanonical(k, build, ca, a, balt);
+            return new Branch(k, ca + cb, a, b);
         }
 
         public static Re alt(Re a, Re b) {
@@ -78,13 +113,7 @@ public abstract class Re implements ReAlg<Re> {
             if (caps == 0
                     && (r = a.fromCharSetNoCapture()) != null
                     && (s = b.fromCharSetNoCapture()) != null) return r.union(s);
-            var aalt = a.fromAltNoCapture();
-            if (aalt != null) {
-                a = aalt.a;
-                b = alt(aalt.b, b);
-            }
-            ;
-            return new Branch(Kind.ALT, caps, a, b);
+            return commuteCanonical(Kind.ALT, Re::fromAltNoCapture, Branch::alt, ca, a, cb, b);
         }
 
         public static Re seq(Re a, Re b) {
@@ -110,7 +139,7 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         public static Re isect(Re a, Re b) {
-            return null;
+            throw new UnsupportedOperationException("NYI");
         }
 
         @Override
@@ -150,14 +179,14 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        public String toString() {
+        public String pp() {
             var sb = new StringBuilder();
             sb.append(kind.toString());
             sb.append(" {");
             Branch br = this, obr = this;
             for (; br != null && br.kind == kind; obr = br, br = br.b.fromBranchNoCapture())
-                sb.append(br.a).append(", ");
-            return sb.append(br == null ? obr.b : br).append('}').toString();
+                sb.append(br.a.pp()).append(", ");
+            return sb.append(br == null ? obr.b.pp() : br.pp()).append('}').toString();
         }
 
         @Override
@@ -358,8 +387,8 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        public String toString() {
-            return "Rep{ " + re + "{" + min + "," + (max == INF_CARD ? "INF" : max) + "} }";
+        public String pp() {
+            return "Rep{ " + re.pp() + "{" + min + "," + (max == INF_CARD ? "INF" : max) + "} }";
         }
 
         @Override
@@ -448,7 +477,7 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        public String toString() {
+        public String pp() {
             return "Lit{'" + val + "'}";
         }
 
@@ -520,8 +549,8 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        public String toString() {
-            return "Neg{" + re + '}';
+        public String pp() {
+            return "Neg{" + re.pp() + '}';
         }
 
         @Override
@@ -604,8 +633,8 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        public String toString() {
-            return "Capture{" + re + '}';
+        public String pp() {
+            return "Capture{" + re.pp() + '}';
         }
 
         @Override
@@ -686,17 +715,17 @@ public abstract class Re implements ReAlg<Re> {
 
     protected Branch fromAltNoCapture() {
         var br = fromBranchNoCapture();
-        return br == null || br.kind == Branch.Kind.ALT ? null : br;
+        return br == null || br.kind != Branch.Kind.ALT ? null : br;
     }
 
     protected Branch fromSeqNoCapture() {
         var br = fromBranchNoCapture();
-        return br == null || br.kind == Branch.Kind.SEQ ? null : br;
+        return br == null || br.kind != Branch.Kind.SEQ ? null : br;
     }
 
     protected Branch fromISectNoCapture() {
         var br = fromBranchNoCapture();
-        return br == null || br.kind == Branch.Kind.IS ? null : br;
+        return br == null || br.kind != Branch.Kind.IS ? null : br;
     }
 
     protected CharSet fromCharSetNoCapture() {
@@ -785,7 +814,7 @@ public abstract class Re implements ReAlg<Re> {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public final boolean equals(Object obj) {
         return obj instanceof Re && compareTo((Re) obj) == 0;
     }
 
@@ -834,5 +863,16 @@ public abstract class Re implements ReAlg<Re> {
     @Override
     public Re asAnything() {
         return Deferred.ANYTHING;
+    }
+
+    public abstract String pp();
+
+    @Override
+    public final String toString() {
+        var pat = "NOPAT";
+        try {
+            pat = toPattern();
+        } catch (Exception ignored) {}
+        return "[" + pat + "]:" + pp();
     }
 }

@@ -24,8 +24,8 @@ public class Enumerated {
                     re.alt("A", re.r("B")),
                     re.alt(re.r("A"), re.r("B"), re.r("C")),
                     re.alt(re.r("A").many(), re.r("B").some()),
-                    //enumeration is broken: re.seq(re.any().many()).seq(re.r("aa"))
-                    //enumeration is broken: re.seq(re.any().many()).seq(re.r("a")).seq(re.any().many()).seq(re.r("bb")),
+                    re.seq(re.any().many()).seq(re.r("aa")),
+                    re.seq(re.any().many()).seq(re.r("a")).seq(re.any().many()).seq(re.r("b")),
                     re.r("AB").seq(re.r("CD").alt(re.r("A")).range(3, 5)).seq(re.r("E")),
                     re.seq("B").seq(re.r("X").repeat(3).some()).seq(re.r("A")),
                     re.seq("B").seq(re.r("X").alt(re.r("Y")).repeat(3).some()).seq(re.r("A"))
@@ -35,6 +35,7 @@ public class Enumerated {
 
     private void assertMatches(Re pat, DFA dfa, String s) {
         if (!dfa.matches(s)) {
+            dfa.matches(s);
             throw new AssertionFailedError(
                     String.format(
                             "DFA does not match pattern:\n  PAT = %s\n  INP = %s\nDFA:%s",
@@ -48,10 +49,21 @@ public class Enumerated {
         var dfa = DFA.compile(pat);
         System.err.println("dfa=" + dfa);
         int i = 0;
-        for (var s : EnumerateTrie.enumerate(pat).stringIterable()) {
-            System.err.println("s=" + s);
+        var trie = EnumerateTrie.enumerate(pat);
+        for (var s : trie.stringIterable()) {
+            if (!s.codePoints().allMatch(CharSet::isPrintable))
+                continue;
+
+            System.err.println("n=" + s.length() + ",s=|" + s + "|");
+
             if (++i >= MAX_ENUMERATIONS) break;
-            assertTrue(jpat.matcher(s).lookingAt(), () -> String.format("jpat=%s s='%s'", jpat, s));
+            if (s.contains("\n") || s.contains("\r"))
+                continue;
+            var jpatMatches = jpat.matcher(s).lookingAt();
+            if (!jpatMatches) {
+                System.err.println("FAILED");
+            }
+            assertTrue(jpatMatches, () -> String.format("jpat=%s s='%s'", jpat, s));
             assertMatches(pat, dfa, s);
         }
     }

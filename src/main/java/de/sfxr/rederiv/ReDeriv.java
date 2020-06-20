@@ -1,13 +1,26 @@
 package de.sfxr.rederiv;
 
 import de.sfxr.rederiv.Re.Neg;
+import de.sfxr.rederiv.support.Checking;
+
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
 public class ReDeriv {
 
+    private final static boolean CHECKING = Checking.isCheckingEnabled(ReDeriv.class);
+
     public static Re deriv(Re re, int ch) {
+        if (CHECKING && !Character.isValidCodePoint(ch))
+            throw new IllegalArgumentException(String.format("0x%04x", ch));
+        var ret = deriv_(re, ch);
+        if (CHECKING)
+            System.err.println("D_" + CharSet.charString(ch) + "<<< " + re + " >>> = " + ret);
+        return ret;
+    }
+
+    private static Re deriv_(Re re, int ch) {
         return re.visitIgnoreCapture(
                 new Re.Visitor<Re>() {
                     @Override
@@ -15,14 +28,14 @@ public class ReDeriv {
                         switch (br.kind) {
                             case SEQ:
                                 // d_a (r s) = (d_a r) s + nu(r) d_a s
-                                var d = deriv(br.a, ch).seq(br.b);
-                                if (br.a.matchesEmpty()) d = d.alt(deriv(br.b, ch));
+                                var d = deriv_(br.a, ch).seq(br.b);
+                                if (br.a.matchesEmpty()) d = d.alt(deriv_(br.b, ch));
                                 return d;
                             case ALT:
                                 // d_a (r + s) = d_a r + d_a s
-                                return deriv(br.a, ch).alt(deriv(br.b, ch));
+                                return deriv_(br.a, ch).alt(deriv_(br.b, ch));
                             case IS:
-                                return deriv(br.a, ch).isect(deriv(br.b, ch));
+                                return deriv_(br.a, ch).isect(deriv_(br.b, ch));
                         }
                         return Re.unreachable();
                     }
@@ -66,7 +79,7 @@ public class ReDeriv {
 
                         var n = rep.re.matchesEmpty() ? 0 : Integer.max(0, rep.min - 1);
                         var m = ReAlg.cardSub(rep.max, 1);
-                        return deriv(rep.re, ch).seq(rep.re.range(n, m));
+                        return deriv_(rep.re, ch).seq(rep.re.range(n, m));
                     }
 
                     @Override
@@ -88,7 +101,7 @@ public class ReDeriv {
 
                     @Override
                     public Re visit(Neg neg) {
-                        return deriv(re, ch).neg();
+                        return deriv_(re, ch).neg();
                     }
                 });
     }

@@ -7,8 +7,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 @Fork(warmups = 0, value = 1)
-@Warmup(iterations = 1, time = 10, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 3, time = 5, timeUnit = TimeUnit.SECONDS)
+@Warmup(iterations = 1, time = 15, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
 public class DFABenchmark {
 
     @State(Scope.Thread)
@@ -34,7 +34,7 @@ public class DFABenchmark {
 
             INP = "a" + sb.toString();
             var m = JPAT.matcher(INP);
-            if (m.matches()) {
+            if (m.lookingAt()) {
                 System.err.println("MATCH END: " + m.end());
             } else {
                 System.err.println("NOMATCH");

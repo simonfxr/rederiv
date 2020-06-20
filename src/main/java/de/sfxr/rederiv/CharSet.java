@@ -1,10 +1,13 @@
 package de.sfxr.rederiv;
 
+import de.sfxr.rederiv.support.Checking;
 import de.sfxr.rederiv.support.Interval;
 import de.sfxr.rederiv.support.IntervalSet;
 import java.util.*;
 
 public final class CharSet extends Re implements Set<Integer> {
+
+    private final static boolean CHECKING = Checking.isCheckingEnabled(CharSet.class);
 
     public static final CharSet NONE = new CharSet(IntervalSet.empty());
     public static final CharSet ANY = new CharSet(NONE.chars, true);
@@ -74,7 +77,7 @@ public final class CharSet extends Re implements Set<Integer> {
     }
 
     @Override
-    public String toString() {
+    public String pp() {
         return isEmptySet() ? "VOID" : "CharSet{ " + toPattern() + " }";
     }
 
@@ -147,6 +150,23 @@ public final class CharSet extends Re implements Set<Integer> {
     }
 
     public int pickOne() {
+
+        if (CHECKING) {
+            var best = -1;
+            for (var iv : toIntervalSet().asList()) {
+                for (var x = iv.a; x < iv.b; ++x) {
+                    if (isPrintable(x)) {
+                        best = x;
+                        if (Character.isAlphabetic(x) || Character.isJavaIdentifierPart(x))
+                            return x;
+                    }
+                }
+            }
+            if (best < 0)
+                throw new IllegalArgumentException();
+            return best;
+        }
+
         var r = repr;
         if (r > 0) return r;
 
@@ -300,4 +320,20 @@ public final class CharSet extends Re implements Set<Integer> {
     public void clear() {
         throw new UnsupportedOperationException();
     }
+
+    public static boolean isPrintable(int c) {
+        Character.UnicodeBlock block;
+        return Character.isValidCodePoint(c) &&
+                !Character.isISOControl(c) &&
+                (block = Character.UnicodeBlock.of(c)) != null &&
+                block != Character.UnicodeBlock.SPECIALS;
+    }
+
+    public static String charString(int c) {
+        if (c < 0 || !Character.isValidCodePoint(c))
+            throw new IllegalArgumentException("invalid code point");
+        if (isPrintable(c)) return Character.toString(c);
+        return String.format("\\u%04x", c);
+    }
+
 }
