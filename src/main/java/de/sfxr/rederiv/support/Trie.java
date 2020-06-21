@@ -1,9 +1,11 @@
 package de.sfxr.rederiv.support;
 
+import com.google.common.base.Preconditions;
+
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -199,9 +201,91 @@ public final class Trie implements Comparable<Trie> {
         };
     }
 
-    public Stream<String> enumateStrings() {
-        var stream = StreamSupport.stream(Spliterators.spliteratorUnknownSize(enumerate(), Spliterator.ORDERED), false);
-        return stream.flatMap(cl -> fromReversedIntervals(cl));
+    private final static class FlattenBFS<T, U> implements Iterator<T> {
+        Iterator<U> source;
+        final Function<U, Iterator<T>> trafo;
+        final Queue<Iterator<T>> pending = new LinkedList<>();
+        T produced;
+
+        FlattenBFS(Iterator<U> source, Function<U, Iterator<T>> trafo) {
+            this.source = Objects.requireNonNull(source);
+            this.trafo = trafo;
+        }
+
+        @Override
+        public boolean hasNext() {
+            Preconditions.checkState(produced == null);
+            while (produced == null && (!pending.isEmpty() || source != null)) {
+                if (source != null) {
+                    if (!source.hasNext())
+                        source = null;
+                    else
+                        pending.add(trafo.apply(Objects.requireNonNull(source.next())));
+                }
+                var it = pending.poll();
+                if (it != null && it.hasNext()) {
+                    produced = it.next();
+                    pending.add(it);
+                }
+            }
+            return produced != null;
+        }
+
+        @Override
+        public T next() {
+            var x = Objects.requireNonNull(produced);
+            produced = null;
+            return x;
+        }
+    }
+
+    private final static class StringCP implements Iterator<String> {
+
+        boolean more = true;
+        final List<Interval<Void>> ivs;
+        final int[] as;
+
+        StringCP(ConsList<Interval<Void>> ivs) {
+            this.ivs = new ArrayList<>();
+            var rev = ConsList.<Interval<Void>>empty();
+            for (var x : ivs) rev = rev.cons(x);
+            for (var iv : rev) this.ivs.add(iv);
+            this.as = new int[this.ivs.size()];
+            int i = 0;
+            for (var iv : this.ivs) as[i++] = iv.a;
+        }
+
+        @Override
+        public boolean hasNext() { return more; }
+
+        @Override
+        public String next() {
+            var sb = new StringBuilder();
+            for (int cp : as) sb.appendCodePoint(cp);
+            more = false;
+            for (int i = as.length - 1; i >= 0; --i) {
+                if (as[i] + 1 < ivs.get(i).b) {
+                    as[i]++;
+                    more = true;
+                    break;
+                }
+                as[i] = ivs.get(i).a;
+            }
+            return sb.toString();
+        }
+    }
+
+    public Iterator<String> enumateStrings() {
+        return new FlattenBFS<>(enumerate(), StringCP::new);
+    }
+
+    public Stream<String> stream() {
+        var splter = Spliterators.spliteratorUnknownSize(enumateStrings(), Spliterator.ORDERED);
+        return StreamSupport.stream(splter, false);
+    }
+
+    public Stream<String> streamUnique() {
+        return stream().distinct();
     }
 
     public boolean containsEpsilon() {
@@ -222,11 +306,21 @@ public final class Trie implements Comparable<Trie> {
         return containsEpsilon && root.isEmpty();
     }
 
+    private boolean maybeEpsilon() {
+        return this == EPSILON || (supplier == null && containsEpsilon && root.isEmpty());
+    }
+
+    private boolean maybeEmpty() {
+        return this == EMPTY || (supplier == null && !containsEpsilon && root.isEmpty());
+    }
+
     public Iterable<String> stringIterable() {
-        return enumateStrings()::iterator;
+        return this::enumateStrings;
     }
 
     public Trie concat(Trie replacement) {
+        if (maybeEmpty()) return EMPTY;
+        if (maybeEpsilon()) return replacement;
         return new Trie(() -> {
             var t = Trie.this;
             t.eval();
@@ -235,12 +329,13 @@ public final class Trie implements Comparable<Trie> {
         });
     }
 
-    public static Stream<String> fromReversedIntervals(ConsList<Interval<Void>> ivs) {
-        if (ivs.isEmpty())
-            return Stream.of("");
-        return fromReversedIntervals(ivs.safeTail()).flatMap(s -> {
-            var iv = ivs.head();
-            return IntStream.range(iv.a, iv.b).mapToObj(c -> String.format("%s%c", s, c));
-        });
+    @Override
+    public String toString() {
+        if (maybeEpsilon()) return "Trie.EPSILON";
+        if (maybeEmpty()) return "Trie.EMPTY";
+        if (supplier != null) {
+            return "Trie<<>>";
+        }
+        return "Trie{" + containsEpsilon + "," + root + "}";
     }
 }

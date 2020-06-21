@@ -3,7 +3,6 @@ package de.sfxr.rederiv;
 import de.sfxr.rederiv.support.IntervalSet;
 import de.sfxr.rederiv.support.OrderedSemigroup;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class DFA {
 
@@ -46,7 +45,9 @@ public class DFA {
 
     private DFA(DFABuilder builder, Re re) {
         this.builder = builder;
-        this.trans = new IntervalSet[builder.Q.size()];
+        @SuppressWarnings("unchecked")
+        var trans = (IntervalSet<Integer>[]) new IntervalSet[builder.Q.size()];
+        this.trans = trans;
         this.initial = newState(0, builder.accepting.contains(0));
         this.re = Objects.requireNonNull(re);
 
@@ -57,7 +58,7 @@ public class DFA {
             } else {
                 trans[i] = d.entrySet().stream()
                         .map(e -> e.getKey().toIntervalSet().map(ignored -> mkDFAState(builder, e.getValue()), INTS))
-                        .collect(Collectors.reducing(IntervalSet.empty(), (x, y) -> x.union(y, INTS)));
+                        .reduce(IntervalSet.empty(), (x, y) -> x.union(y, INTS));
             }
         }
     }

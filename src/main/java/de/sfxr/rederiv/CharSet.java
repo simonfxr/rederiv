@@ -35,7 +35,7 @@ public final class CharSet extends Re implements Set<Integer> {
     }
 
     @Override
-    protected String toPattern(int prec) {
+    protected String toPattern(int prec, boolean ext) {
         if (chars.isEmpty()) {
             if (!complement)
                 throw new IllegalStateException(

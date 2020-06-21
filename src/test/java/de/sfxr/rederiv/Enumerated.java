@@ -48,24 +48,22 @@ public class Enumerated {
         var jpat = Pattern.compile(pat.toPattern());
         var dfa = DFA.compile(pat);
         System.err.println("dfa=" + dfa);
-        int i = 0;
         var trie = EnumerateTrie.enumerate(pat);
-        for (var s : trie.stringIterable()) {
-            if (!s.codePoints().allMatch(CharSet::isPrintable))
-                continue;
-
+        var strings = trie.streamUnique()
+                .filter(s -> s.codePoints().allMatch(CharSet::isPrintable))
+                .limit(MAX_ENUMERATIONS);
+        strings.forEach(s -> {
             System.err.println("n=" + s.length() + ",s=|" + s + "|");
 
-            if (++i >= MAX_ENUMERATIONS) break;
             if (s.contains("\n") || s.contains("\r"))
-                continue;
+                return;
             var jpatMatches = jpat.matcher(s).lookingAt();
             if (!jpatMatches) {
                 System.err.println("FAILED");
             }
             assertTrue(jpatMatches, () -> String.format("jpat=%s s='%s'", jpat, s));
             assertMatches(pat, dfa, s);
-        }
+        });
     }
 
     @Test

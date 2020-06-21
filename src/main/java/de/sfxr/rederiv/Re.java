@@ -69,12 +69,17 @@ public abstract class Re implements ReAlg<Re> {
 
         private static Branch commuteCanonical(Kind k, BiFunction<Re, Re, Re> build, int ca, Re a, Branch bc) {
             var o = a.compareTo(bc.a);
-            if (o == 0) return bc;
-            if (o < 0) return new Branch(k, ca + bc.capCount, a, bc);
+            if (o == 0 && ca == 0) return bc;
+            // can commute a OP (b OP c) => b OP (a OP C) IFF either a or b has no captures
+            int cb = -1;
+            if (o < 0 || (ca > 0 && (cb = bc.a.countCaptures()) > 0))
+                return new Branch(k, ca + bc.capCount, a, bc);
             var rhs = build.apply(a, bc.b);
-            return new Branch(k, bc.a.countCaptures() + rhs.countCaptures(), bc.a, rhs);
+            if (cb < 0) cb = bc.a.countCaptures();
+            return new Branch(k, cb + rhs.countCaptures(), bc.a, rhs);
         }
 
+        // FIXME: this does not respect capture ordering
         private static Re commuteCanonical(Kind k, Function<Re, Branch> unfold, BiFunction<Re, Re, Re> build, int ca, Re a, int cb, Re b) {
             var aalt = unfold.apply(a);
             var balt = unfold.apply(b);
@@ -139,18 +144,36 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         public static Re isect(Re a, Re b) {
-            throw new UnsupportedOperationException("NYI");
+            var ca = a.countCaptures();
+            var cb = b.countCaptures();
+            var ord = a.compareTo(b);
+            if (ord == 0 && ca == 0) return b;
+            if (ord == 0 && cb == 0) return a;
+            if (cb == 0 && a.isVoid()) return a;
+            if (ca == 0 && b.isVoid()) return b;
+            var caps = ca + cb;
+
+            if (cb == 0 && a.isEmpty() && b.matchesEmpty()) return a;
+            if (ca == 0 && b.isEmpty() && a.matchesEmpty()) return b;
+
+            CharSet r, s;
+            if (caps == 0
+                    && (r = a.fromCharSetNoCapture()) != null
+                    && (s = b.fromCharSetNoCapture()) != null) return r.intersect(s);
+            return commuteCanonical(Kind.IS, Re::fromISectNoCapture, Branch::isect, ca, a, cb, b);
         }
 
         @Override
-        protected String toPattern(int prec) {
+        protected String toPattern(int prec, boolean ext) {
             switch (kind) {
                 case SEQ:
-                    return Re.parenWhen(prec > 9, a.toPattern(9) + b.toPattern(9));
+                    return Re.parenWhen(prec > 9, a.toPattern(9, ext) + b.toPattern(9, ext));
                 case ALT:
-                    return Re.parenWhen(prec > 7, a.toPattern(7) + "|" + b.toPattern(7));
+                    return Re.parenWhen(prec > 7, a.toPattern(7, ext) + "|" + b.toPattern(7, ext));
                 case IS:
-                    return Re.parenWhen(prec > 8, a.toPattern(8) + "&" + b.toPattern(8));
+                    if (!ext)
+                        throw new IllegalArgumentException("Can't convert intersection to a non extended pattern string");
+                    return Re.parenWhen(prec > 8, a.toPattern(8, ext) + "&" + b.toPattern(8, ext));
             }
             return unreachable();
         }
@@ -366,14 +389,14 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        public String toPattern(int prec) {
+        public String toPattern(int prec, boolean ext) {
             var multiplicity =
                     max == INF_CARD
                             ? (min == 0 ? "*" : min == 1 ? "+" : "{" + min + ",}")
                             : min == max
                                     ? (min == 1 ? "?" : "{" + min + "}")
                                     : "{" + min + "," + max + "}";
-            return parenWhen(prec > 10, re.toPattern(10) + multiplicity);
+            return parenWhen(prec > 10, re.toPattern(10, ext) + multiplicity);
         }
 
         @Override
@@ -457,7 +480,7 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        public String toPattern(int prec) {
+        public String toPattern(int prec, boolean ext) {
             return Pattern.quote(val);
         }
 
@@ -524,8 +547,10 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        protected String toPattern(int prec) {
-            return "!" + re.toPattern(0);
+        protected String toPattern(int prec, boolean ext) {
+            if (!ext)
+                throw new IllegalArgumentException("Can't convert a negated pattern to a non exended patten string");
+            return "!" + re.toPattern(0, ext);
         }
 
         @Override
@@ -593,8 +618,8 @@ public abstract class Re implements ReAlg<Re> {
         }
 
         @Override
-        protected String toPattern(int prec) {
-            return "(" + re.toPattern(0) + ")";
+        protected String toPattern(int prec, boolean ext) {
+            return "(" + re.toPattern(0, ext) + ")";
         }
 
         @Override
@@ -700,10 +725,12 @@ public abstract class Re implements ReAlg<Re> {
     }
 
     public String toPattern() {
-        return toPattern(0);
+        return toPattern(0, false);
     }
 
-    protected abstract String toPattern(int prec);
+    public String toExtendedPattern() { return toPattern(0, true); }
+
+    protected abstract String toPattern(int prec, boolean ext);
 
     protected String fromLit() {
         return null;
@@ -871,7 +898,7 @@ public abstract class Re implements ReAlg<Re> {
     public final String toString() {
         var pat = "NOPAT";
         try {
-            pat = toPattern();
+            pat = toExtendedPattern();
         } catch (Exception ignored) {}
         return "[" + pat + "]:" + pp();
     }
