@@ -2,6 +2,7 @@ package de.sfxr.rederiv.support;
 
 import de.sfxr.rederiv.CharSet;
 import de.sfxr.rederiv.Re;
+import de.sfxr.rederiv.ReAlg;
 
 public final class EnumerateTrie {
     private EnumerateTrie() {}
@@ -42,7 +43,7 @@ public final class EnumerateTrie {
                     for (int i = 0; i < rep.min; ++i) u = t.concat(u);
 
                     Trie tail;
-                    if (rep.max == Integer.MAX_VALUE) {
+                    if (rep.max == ReAlg.INF_CARD) {
                         tail = u.concat(kleene(t));
                     } else {
                         tail = Trie.epsilon();

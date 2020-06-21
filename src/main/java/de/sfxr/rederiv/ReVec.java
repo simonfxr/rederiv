@@ -6,10 +6,15 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class ReVec<Re extends ReAlg<Re>> extends ForwardingList<Re> implements ReAlg<ReVec<Re>> {
 
-    public final List<Re> res;
+    private final List<Re> res;
+
+    public ReVec(int n, Re re) {
+        this(IntStream.range(0, n).mapToObj(ignored -> re).collect(Collectors.toList()));
+    }
 
     public ReVec(List<Re> res) {
         this.res = Objects.requireNonNull(res);
@@ -130,5 +135,15 @@ public class ReVec<Re extends ReAlg<Re>> extends ForwardingList<Re> implements R
             cs = cs == null ? ds : ReDeriv.intersections(cs, ds);
         }
         return cs;
+    }
+
+    @Override
+    public boolean matchesEmpty() {
+        return delegate().stream().anyMatch(Re::matchesEmpty);
+    }
+
+    @Override
+    public boolean isVoid() {
+        return delegate().stream().allMatch(Re::isVoid);
     }
 }

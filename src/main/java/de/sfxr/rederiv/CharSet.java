@@ -38,7 +38,7 @@ public final class CharSet extends Re implements Set<Integer> {
     protected String toPattern(int prec, boolean ext) {
         if (chars.isEmpty()) {
             if (!complement)
-                throw new IllegalStateException(
+                throw new IllegalArgumentException(
                         "Can't convert the empty character class to a pattern");
             return ".";
         }
@@ -51,7 +51,7 @@ public final class CharSet extends Re implements Set<Integer> {
                 b.appendCodePoint(iv.a);
             } else {
                 if (iv.isEmpty()) {
-                    throw new IllegalStateException();
+                    throw new IllegalArgumentException();
                 }
                 b.appendCodePoint(iv.a);
                 if (iv.size() != 2) b.append('-');
@@ -146,7 +146,7 @@ public final class CharSet extends Re implements Set<Integer> {
         // int i = 0;
         // for (var x : this) a[i++] = (T) x;
         // return a;
-        throw new IllegalStateException("NYI");
+        throw new UnsupportedOperationException("NYI");
     }
 
     public int pickOne() {

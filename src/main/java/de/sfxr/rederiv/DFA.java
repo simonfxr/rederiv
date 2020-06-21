@@ -4,9 +4,9 @@ import de.sfxr.rederiv.support.IntervalSet;
 import de.sfxr.rederiv.support.OrderedSemigroup;
 import java.util.*;
 
-public class DFA {
+public class DFA<Re extends ReAlg<Re>> {
 
-    private final DFABuilder builder;
+    private final DFABuilder<Re> builder;
 
     private final IntervalSet<Integer>[] trans;
     private final int initial;
@@ -25,7 +25,7 @@ public class DFA {
         return (s & 1) != 0;
     }
 
-    private static int mkDFAState(DFABuilder builder, int q) {
+    private static int mkDFAState(DFABuilder<?> builder, int q) {
         return newState(q, builder.accepting.contains(q));
     }
 
@@ -43,7 +43,7 @@ public class DFA {
         }
     };
 
-    private DFA(DFABuilder builder, Re re) {
+    private DFA(DFABuilder<Re> builder, Re re) {
         this.builder = builder;
         @SuppressWarnings("unchecked")
         var trans = (IntervalSet<Integer>[]) new IntervalSet[builder.Q.size()];
@@ -83,10 +83,10 @@ public class DFA {
         return true;
     }
 
-    public static DFA compile(Re re) {
-        var builder = new DFABuilder();
+    public static <Re extends ReAlg<Re>> DFA<Re> compile(Re re) {
+        var builder = new DFABuilder<Re>();
         builder.build(re);
-        return new DFA(builder, re);
+        return new DFA<>(builder, re);
     }
 
     public Re re() { return re; }

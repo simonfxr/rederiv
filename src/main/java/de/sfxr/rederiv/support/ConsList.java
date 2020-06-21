@@ -3,6 +3,7 @@ package de.sfxr.rederiv.support;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 public class ConsList<T> implements Iterable<T> {
     private final T hd;
@@ -69,18 +70,17 @@ public class ConsList<T> implements Iterable<T> {
     public Iterator<T> iterator() {
         return new Iterator<>() {
             private ConsList<T> i = ConsList.this;
-            private T x = null;
 
             @Override
             public boolean hasNext() {
-                if (i.isEmpty()) return false;
-                x = i.head();
-                i = i.tail();
-                return true;
+                return !i.isEmpty();
             }
 
             @Override
             public T next() {
+                if (i.isEmpty()) throw new NoSuchElementException();
+                var x = i.head();
+                i = i.tail();
                 return x;
             }
         };

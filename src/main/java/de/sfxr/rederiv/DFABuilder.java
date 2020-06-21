@@ -4,7 +4,7 @@ import de.sfxr.rederiv.support.Checking;
 import java.util.*;
 import java.util.stream.Collectors;
 
-final class DFABuilder {
+final class DFABuilder<Re extends ReAlg<Re>> {
 
     private static final boolean CHECKING = Checking.isCheckingEnabled(DFABuilder.class);
 
@@ -16,16 +16,16 @@ final class DFABuilder {
     private int putQ(Re q) {
         var old = Q.putIfAbsent(q, nextQ);
         if (CHECKING && old == null) System.err.println("Q.ins: " + nextQ);
-        return old != null ? old : nextQ++;
+        if (old != null)
+            return old;
+        int next = nextQ;
+        nextQ = next + 1;
+        return next;
     }
 
     private void putDelta(int qI, CharSet S, int dqI) {
-        var t = delta.get(qI);
-        if (t == null) {
-            t = new HashMap<>();
-            delta.put(qI, t);
-        }
-        if (CHECKING) System.err.printf("delta(%d, %s) -> %d\n", qI, S, dqI);
+        var t = delta.computeIfAbsent(qI, ignored -> new HashMap<>());
+        if (CHECKING) System.err.printf("delta(%d, %s) -> %d%n", qI, S, dqI);
         t.put(S, dqI);
     }
 
@@ -34,7 +34,7 @@ final class DFABuilder {
         var qI = putQ(q);
         var repr = S.pickOne();
         if (CHECKING) System.out.println("q={" + qI + "}" + q + ", S=" + S + ", repr=" + Character.toString(repr));
-        var dq = ReDeriv.deriv(q, repr);
+        var dq = q.deriv(repr);
         if (!dq.isVoid()) {
             var fresh = Q.get(dq) == null;
             var dqI = putQ(dq);
@@ -47,13 +47,13 @@ final class DFABuilder {
     }
 
     private void explore(Re q) {
-        for (var S : ReDeriv.derivClasses(q)) buildRec(q, S);
+        for (var S : q.derivClasses()) buildRec(q, S);
     }
 
     void build(Re q) {
         explore(q);
         for (var ent : Q.entrySet())
-            if (ent.getKey().matchesEmpty()) accepting.add(ent.getValue().intValue());
+            if (ent.getKey().matchesEmpty()) accepting.add(ent.getValue());
         if (q.matchesEmpty()) accepting.add(0);
     }
 
@@ -69,14 +69,14 @@ final class DFABuilder {
         for (var ent : states)
             sb.append("  S")
                     .append(ent.getKey())
-                    .append(accepting.contains(ent.getKey().intValue()) ? " F " : "   ")
+                    .append(accepting.contains(ent.getKey()) ? " F " : "   ")
                     .append(": ")
                     .append(ent.getValue())
                     .append('\n');
         sb.append('\n');
 
         for (var ent : states) {
-            var q = ent.getKey().intValue();
+            var q = ent.getKey();
             var tt = delta.get(q);
             sb.append("  S").append(q).append("{");
             if (tt == null) {
@@ -88,7 +88,7 @@ final class DFABuilder {
                 sb.append("    ")
                         .append(t.getKey().toPattern())
                         .append(" -> S")
-                        .append(t.getValue().intValue())
+                        .append(t.getValue())
                         .append('\n');
             sb.append("  }\n");
         }

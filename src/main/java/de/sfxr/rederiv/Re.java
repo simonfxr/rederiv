@@ -300,11 +300,11 @@ public abstract class Re implements ReAlg<Re> {
 
             if (re.isEmpty() || (min == 1 && max == 1)) return re;
 
-            if (min == Integer.MAX_VALUE) return re.asVoid();
+            if (min == INF_CARD) return re.asVoid();
 
             {
                 var cs = re.fromCharSetNoCapture();
-                if (cs == Re.Deferred.ANYTHING && min == 0 && max == Integer.MAX_VALUE)
+                if (cs == CharSet.ANY && min == 0 && max == INF_CARD)
                     return Re.Deferred.ANYTHING;
             }
 
@@ -884,7 +884,7 @@ public abstract class Re implements ReAlg<Re> {
     }
 
     private final static class Deferred {
-        static final Re ANYTHING = new Rep(0, Integer.MAX_VALUE, CharSet.ANY);
+        static final Re ANYTHING = new Rep(0, INF_CARD, CharSet.ANY);
     }
 
     @Override
@@ -896,10 +896,12 @@ public abstract class Re implements ReAlg<Re> {
 
     @Override
     public final String toString() {
-        var pat = "NOPAT";
+        String pat;
         try {
             pat = toExtendedPattern();
-        } catch (Exception ignored) {}
+        } catch (IllegalArgumentException ignored) {
+            pat = "<NOPAT>";
+        }
         return "[" + pat + "]:" + pp();
     }
 }

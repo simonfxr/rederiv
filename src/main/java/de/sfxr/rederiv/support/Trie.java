@@ -233,7 +233,9 @@ public final class Trie implements Comparable<Trie> {
 
         @Override
         public T next() {
-            var x = Objects.requireNonNull(produced);
+            if (produced == null)
+                throw new NoSuchElementException();
+            var x = produced;
             produced = null;
             return x;
         }

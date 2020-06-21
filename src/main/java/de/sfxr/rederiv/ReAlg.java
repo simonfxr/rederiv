@@ -74,4 +74,8 @@ public interface ReAlg<R extends ReAlg<R>> extends Comparable<R> {
     Set<CharSet> derivClasses();
 
     R asVoid();
+
+    boolean isVoid();
+
+    boolean matchesEmpty();
 }
